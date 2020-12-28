@@ -89,6 +89,17 @@ namespace jkcnsl
                         quitCts.Token.ThrowIfCancellationRequested();
                         switch (comm.FirstOrDefault())
                         {
+                            case 'G':
+                                {
+                                    string[] arg = comm.Substring(1).Split(new char[] { ' ' }, 2);
+                                    if (arg.Length < 1)
+                                    {
+                                        ResponseLines.Add("!");
+                                        break;
+                                    }
+                                    await GetHttpGetStringAsync(arg[0], arg.Length >= 2 ? arg[1] : "", quitCts.Token);
+                                }
+                                break;
                             case 'L':
                                 {
                                     string[] arg = comm.Substring(1).Split(new char[] { ' ' }, 2);
@@ -189,6 +200,27 @@ namespace jkcnsl
 
             // すこし待つ
             Task.WaitAll(new Task[] { processTask, writeTask }, TimeSpan.FromSeconds(8));
+        }
+
+        /// <summary>汎用のHTTP-GET</summary>
+        static async Task GetHttpGetStringAsync(string uri, string cookie, CancellationToken ct)
+        {
+            string ret;
+            try
+            {
+                ret = await HttpClientGetStringAsync(uri, cookie, ct);
+            }
+            catch
+            {
+                ct.ThrowIfCancellationRequested();
+                ResponseLines.Add("!");
+                return;
+            }
+            foreach (string r in ret.Replace("\r", "").Split('\n'))
+            {
+                ResponseLines.Add("-" + r);
+            }
+            ResponseLines.Add(".");
         }
 
         /// <summary>実況ストリーム(.nicovideo.jp)</summary>
