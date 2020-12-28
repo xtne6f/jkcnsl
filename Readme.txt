@@ -8,8 +8,7 @@
 があり使えません)、ビルドは各種のシェルでプロジェクトフォルダに移動し、
 > dotnet publish -c Release -r win10-x86 /p:PublishSingleFile=true /p:PublishTrimmed=true
 などとしてください。
-System.Net.WebSockets.ClientWebSocketを使用しているので、動作環境はWindowsでは
-Windows10以降に限定されると思います。
+動作環境はWindowsではWindows7以降と思います。
 jkcnslを起動して、
 > Lch???<改行> (←???は実況の番号)
 などと打ち込めば、取得したコメントが流れます。終了は c<改行> や q<改行> と打ち込

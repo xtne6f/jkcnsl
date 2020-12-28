@@ -229,7 +229,7 @@ namespace jkcnsl
             // メソッド実装にあたり特に https://github.com/tsukumijima/TVRemotePlus および https://github.com/asannou/namami を参考にした。
 
             WatchEmbedded embedded = null;
-            if (Regex.IsMatch(lvId, "^(?:ch|lv)[0-9]+$"))
+            if (Regex.IsMatch(lvId, "^(?:ch|co|lv)[0-9]+$"))
             {
                 // 視聴セッション情報を取得
                 try
