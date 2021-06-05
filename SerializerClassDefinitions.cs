@@ -170,6 +170,8 @@ namespace jkcnsl
     {
         [DataMember(EmitDefaultValue = false)]
         public string color { get; set; }
+        [DataMember(EmitDefaultValue = false)]
+        public string font { get; set; }
         [DataMember]
         public bool isAnonymous { get; set; }
         [DataMember(EmitDefaultValue = false)]

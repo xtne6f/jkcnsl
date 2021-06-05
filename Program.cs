@@ -365,7 +365,8 @@ namespace jkcnsl
                                             string mail = " " + posts[0] + " ";
                                             Match matchColor = Regex.Match(mail, " (white|red|pink|orange|yellow|green|cyan|blue|purple|black|" +
                                                 "white2|niconicowhite|red2|truered|pink2|orange2|passionorange|yellow2|madyellow|green2|" +
-                                                "elementalgreen|cyan2|blue2|marineblue|purple2|nobleviolet|black2) ");
+                                                "elementalgreen|cyan2|blue2|marineblue|purple2|nobleviolet|black2|#[0-9A-Fa-f]{6}) ");
+                                            Match matchFont = Regex.Match(mail, " (defont|mincho|gothic) ");
                                             bool isAnonymous = Regex.IsMatch(mail, " 184 ");
                                             Match matchPosition = Regex.Match(mail, " (ue|naka|shita) ");
                                             Match matchSize = Regex.Match(mail, " (big|medium|small) ");
@@ -380,6 +381,7 @@ namespace jkcnsl
                                                 data = new WatchSessionPostData()
                                                 {
                                                     color = matchColor.Success ? matchColor.Groups[1].Value : null,
+                                                    font = matchFont.Success ? matchFont.Groups[1].Value : null,
                                                     isAnonymous = isAnonymous,
                                                     position = matchPosition.Success ? matchPosition.Groups[1].Value : null,
                                                     size = matchSize.Success ? matchSize.Groups[1].Value : null,
