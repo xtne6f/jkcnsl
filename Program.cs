@@ -281,8 +281,8 @@ namespace jkcnsl
                     // 視聴セッションに接続
                     await watchSession.ConnectAsync(new Uri(embedded.site.relive.webSocketUrl), ct);
                     await watchSession.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(
-                        "{\"type\":\"startWatching\",\"data\":{\"stream\":{\"quality\":\"super_high\",\"protocol\":\"hls\",\"latency\":\"low\",\"chasePlay\":false}," +
-                        "\"room\":{\"protocol\":\"webSocket\",\"commentable\":true},\"reconnect\":false}}")), WebSocketMessageType.Text, true, ct);
+                        "{\"type\":\"startWatching\",\"data\":{\"room\":{\"protocol\":\"webSocket\",\"commentable\":true},\"reconnect\":false}}")),
+                        WebSocketMessageType.Text, true, ct);
 
                     int keepSeatIntervalSec = 0;
                     int keepSeatTick = 0;
