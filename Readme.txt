@@ -4,11 +4,11 @@
 おもにニコニコ実況のコメントを取得する非公式のコマンドラインツールです。
 
 ■使い方など
-.NET Coreアプリなので(FrameworkでもビルドできますがClientWebSocketに決定的なバグ
-があり使えません)、ビルドは各種のシェルでプロジェクトフォルダに移動し、
-> dotnet publish -c Release -r win10-x86 /p:PublishSingleFile=true /p:PublishTrimmed=true
+.NETアプリなので(FrameworkでもビルドできますがClientWebSocketに決定的なバグがあ
+り使えません)、ビルドは各種のシェルでプロジェクトフォルダに移動し、
+> dotnet publish -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true /p:PublishTrimmed=true
 などとしてください。
-動作環境はWindowsではWindows7以降と思います。
+動作環境はWindowsではWindows10以降と思います。
 jkcnslを起動して、
 > Lch???<改行> (←???は実況の番号)
 などと打ち込めば、取得したコメントが流れます。終了は c<改行> や q<改行> と打ち込
