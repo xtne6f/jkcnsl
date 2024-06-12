@@ -84,6 +84,7 @@ namespace jkcnsl
         public WatchSessionResultMessageServer messageServer { get; set; }
         public string threadId { get; set; }
         public string yourPostKey { get; set; }
+        public string vposBaseTime { get; set; }
     }
 
     public class WatchSessionResultSeat

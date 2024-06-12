@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -108,7 +109,19 @@ namespace jkcnsl
                                         ResponseLines.Add("!");
                                         break;
                                     }
-                                    await GetStreamAsync(arg[0], arg.Length >= 2 ? arg[1] : "", commands, quitCts.Token);
+                                    await GetNicovideoStreamAsync(arg[0], arg.Length >= 2 ? arg[1] : "", commands, quitCts.Token);
+                                }
+                                break;
+                            case 'R':
+                                {
+                                    string[] arg = comm.Substring(1).Split(new char[] { ' ' }, 3);
+                                    // 避難所の種類によって解釈を変える。現在は"R1"のみ
+                                    if (arg.Length < 2 || arg[0] != "1")
+                                    {
+                                        ResponseLines.Add("!");
+                                        break;
+                                    }
+                                    await GetRefugeStreamAsync(arg[1], commands, quitCts.Token);
                                 }
                                 break;
                             /********* 旧実況テストコードここから **********
@@ -224,7 +237,7 @@ namespace jkcnsl
         }
 
         /// <summary>実況ストリーム(.nicovideo.jp)</summary>
-        static async Task GetStreamAsync(string lvId, string cookie, BlockingCollection<string> commands, CancellationToken ct)
+        static async Task GetNicovideoStreamAsync(string lvId, string cookie, BlockingCollection<string> commands, CancellationToken ct)
         {
             // メソッド実装にあたり特に https://github.com/tsukumijima/TVRemotePlus および https://github.com/asannou/namami を参考にした。
 
@@ -263,7 +276,29 @@ namespace jkcnsl
                 ResponseLines.Add("!");
                 return;
             }
+            await GetStreamAsync(embedded, commands, ct);
+        }
 
+        /// <summary>実況ストリーム(避難所)</summary>
+        static async Task GetRefugeStreamAsync(string webSocketUrl, BlockingCollection<string> commands, CancellationToken ct)
+        {
+            if (!webSocketUrl.StartsWith("wss://", StringComparison.Ordinal))
+            {
+                ResponseLines.Add("!");
+                return;
+            }
+            var embedded = new WatchEmbedded()
+            {
+                // vposBaseTimeは視聴セッションの"room"で得る
+                program = new WatchEmbeddedProgram(),
+                site = new WatchEmbeddedSite() { relive = new WatchEmbeddedRelive() { webSocketUrl = webSocketUrl } },
+            };
+            await GetStreamAsync(embedded, commands, ct);
+        }
+
+        /// <summary>実況ストリーム</summary>
+        static async Task GetStreamAsync(WatchEmbedded embedded, BlockingCollection<string> commands, CancellationToken ct)
+        {
             using (var watchSession = new ClientWebSocket())
             using (var commentSession = new ClientWebSocket())
             using (var closeCts = new CancellationTokenSource())
@@ -500,6 +535,15 @@ namespace jkcnsl
                                                 (embedded.user != null && embedded.user.id != null ? " user_id=\"" + HtmlEncodeAmpLtGt(embedded.user.id, true) + "\"" : "") +
                                                 (embedded.user != null && embedded.user.nickname != null ? " nickname=\"" + HtmlEncodeAmpLtGt(embedded.user.nickname, true) + "\"" : "") +
                                                 (embedded.user != null && embedded.user.isLoggedIn ? " is_logged_in=\"1\"" : "") + " />").Replace("\n", "&#10;").Replace("\r", "&#13;"));
+
+                                            if (room.vposBaseTime != null && embedded.program != null && embedded.program.vposBaseTime <= 0)
+                                            {
+                                                DateTime d;
+                                                if (DateTime.TryParse(room.vposBaseTime, CultureInfo.InvariantCulture, out d))
+                                                {
+                                                    embedded.program.vposBaseTime = (d.ToUniversalTime() - new DateTime(1970, 1, 1)).TotalSeconds;
+                                                }
+                                            }
 
                                             if (room.threadId != null && room.messageServer != null && room.messageServer.uri != null &&
                                                 room.messageServer.uri.StartsWith("wss://", StringComparison.Ordinal))
