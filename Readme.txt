@@ -25,6 +25,11 @@ MITとします。
 ■ソース
 https://github.com/xtne6f/jkcnsl
 
+dwangoフォルダ以下のファイルは
+https://github.com/n-air-app/nicolive-comment-protobuf/tree/bf66a84370db5785cd3685b3072ef08ae888284e
+の.protoをもとにprotogen 3.2.42を使って以下のpowershellコマンドで作成しました。
+> ls dwango\nicolive\chat\data\*.proto, dwango\nicolive\chat\data\atoms\*.proto, dwango\nicolive\chat\service\edge\payload.proto | Resolve-Path -Relative | %{protogen --csharp_out=. +names=original "$_"}
+
 ■謝辞
 実装にあたり特に https://github.com/tsukumijima/TVRemotePlus および
 https://github.com/asannou/namami を参考にしました。とりわけ変数名など多くのアイ
