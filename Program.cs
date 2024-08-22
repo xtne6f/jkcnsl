@@ -66,6 +66,8 @@ namespace jkcnsl
 
         static readonly BlockingCollection<string> ResponseLines = new BlockingCollection<string>();
 
+        static bool _nicovideoLoginChecked = false;
+
         class StreamMixingInfo
         {
             public bool dropForwardedChat;
@@ -127,6 +129,20 @@ namespace jkcnsl
                         quitCts.Token.ThrowIfCancellationRequested();
                         switch (comm.FirstOrDefault())
                         {
+                            case 'A':
+                                if (comm == "Ai")
+                                {
+                                    await NicovideoLoginAsync(quitCts.Token);
+                                }
+                                else if (comm == "Ao")
+                                {
+                                    await NicovideoLogoutAsync(quitCts.Token);
+                                }
+                                else
+                                {
+                                    ResponseLines.Add("!");
+                                }
+                                break;
                             case 'G':
                                 {
                                     string[] arg = comm.Substring(1).Split(new char[] { ' ' }, 2);
@@ -163,13 +179,48 @@ namespace jkcnsl
                                     string[] arg = comm.Substring(1).Split(new char[] { ' ' }, 2);
                                     if (arg.Length < 2)
                                     {
-                                        if (arg[0] == "useragent")
+                                        if (arg[0] == "nicovideo_cookie")
+                                        {
+                                            // クッキーを削除
+                                            _nicovideoLoginChecked = false;
+                                            Settings.Instance.nicovideo_cookie = null;
+                                        }
+                                        else if (arg[0] == "mail")
+                                        {
+                                            // 設定を削除
+                                            Settings.Instance.nicovideo_cookie = null;
+                                            Settings.Instance.mail = null;
+                                        }
+                                        else if (arg[0] == "password")
+                                        {
+                                            Settings.Instance.nicovideo_cookie = null;
+                                            Settings.Instance.password = null;
+                                        }
+                                        else if (arg[0] == "useragent")
                                         {
                                             Settings.Instance.useragent = null;
                                         }
                                         else if (arg[0].Length == 0)
                                         {
                                             // すべての設定を出力
+                                            if (Settings.Instance.nicovideo_cookie != null)
+                                            {
+                                                ResponseLines.Add("-nicovideo_cookie " + Settings.Instance.nicovideo_cookie);
+                                            }
+                                            if (Settings.Instance.mail != null)
+                                            {
+                                                ResponseLines.Add("-mail " + Settings.Instance.mail);
+                                            }
+                                            if (Settings.Instance.password != null)
+                                            {
+                                                // 3文字だけ表示
+                                                string maskedPassword = Settings.Instance.password;
+                                                if (maskedPassword.Length > 3)
+                                                {
+                                                    maskedPassword = maskedPassword.Substring(0, 3) + new string('*', maskedPassword.Length - 3);
+                                                }
+                                                ResponseLines.Add("-password " + maskedPassword);
+                                            }
                                             ResponseLines.Add("-useragent " + (Settings.Instance.useragent ?? UserAgent));
                                             ResponseLines.Add(".");
                                             break;
@@ -183,7 +234,19 @@ namespace jkcnsl
                                     else
                                     {
                                         // 設定を変更
-                                        if (arg[0] == "useragent")
+                                        if (arg[0] == "mail")
+                                        {
+                                            _nicovideoLoginChecked = false;
+                                            Settings.Instance.nicovideo_cookie = null;
+                                            Settings.Instance.mail = arg[1];
+                                        }
+                                        else if (arg[0] == "password")
+                                        {
+                                            _nicovideoLoginChecked = false;
+                                            Settings.Instance.nicovideo_cookie = null;
+                                            Settings.Instance.password = arg[1];
+                                        }
+                                        else if (arg[0] == "useragent")
                                         {
                                             Settings.Instance.useragent = arg[1];
                                         }
@@ -263,7 +326,7 @@ namespace jkcnsl
         }
 
         /// <summary>実況ストリーム(混合)</summary>
-        static async Task GetNicovideoRefugeMixedStreamAsync(string webSocketUrl, string lvId, string cookie, BlockingCollection<string> commands, CancellationToken ct)
+        static async Task GetNicovideoRefugeMixedStreamAsync(string webSocketUrl, string lvId, string nicovideoCookie, BlockingCollection<string> commands, CancellationToken ct)
         {
             bool closing = false;
             var nicovideoCommands = new BlockingCollection<string>();
@@ -300,7 +363,7 @@ namespace jkcnsl
                 {
                     nicovideoConnected = true;
                     nicovideoInitialized = true;
-                    bool failed = await GetNicovideoStreamAsync(lvId, cookie, nicovideoCommands, mixingInfo, ct) != ".";
+                    bool failed = await GetNicovideoStreamAsync(lvId, nicovideoCookie, nicovideoCommands, mixingInfo, ct) != ".";
                     nicovideoConnected = false;
                     // 適当なタグをでっちあげて切断を通知
                     ResponseLines.Add("-<x_disconnect status=\"" + (failed ? 1 : 0) + "\" />");
@@ -352,6 +415,9 @@ namespace jkcnsl
                 // 視聴セッション情報を取得
                 try
                 {
+                    // ログイン情報が設定されているときcookie引数は使わない
+                    cookie = await GetNicovideoLoginCookieAsync(ct) ?? cookie;
+
                     string ret = await HttpClientGetStringAsync("https://live.nicovideo.jp/watch/" + lvId, cookie, ct);
                     Match match = Regex.Match(ret, "<script(?= )([^>]*? id=\"embedded-data\"[^>]*)>");
                     if (match.Success)
@@ -1282,6 +1348,134 @@ namespace jkcnsl
                 }
             }
             return ".";
+        }
+
+        /// <summary>.nicovideo.jpにログインする</summary>
+        static async Task NicovideoLoginAsync(CancellationToken ct)
+        {
+            _nicovideoLoginChecked = false;
+            try
+            {
+                await GetNicovideoLoginCookieAsync(ct);
+            }
+            catch (Exception e)
+            {
+                ct.ThrowIfCancellationRequested();
+                Trace.WriteLine(e.ToString());
+                ResponseLines.Add("!");
+                return;
+            }
+            ResponseLines.Add(Settings.Instance.nicovideo_cookie != null ? "." : "!");
+        }
+
+        /// <summary>.nicovideo.jpからログアウトする</summary>
+        static async Task NicovideoLogoutAsync(CancellationToken ct)
+        {
+            if (Settings.Instance.nicovideo_cookie != null)
+            {
+                try
+                {
+                    await HttpClientGetStringAsync("https://account.nicovideo.jp/logout?site=niconico", Settings.Instance.nicovideo_cookie, ct);
+                }
+                catch (Exception e)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    Trace.WriteLine(e.ToString());
+                    ResponseLines.Add("!");
+                    return;
+                }
+                Settings.Instance.nicovideo_cookie = null;
+                Settings.Instance.Save();
+            }
+            ResponseLines.Add(".");
+        }
+
+        /// <summary>ログインしていなければ.nicovideo.jpにログインしてセッションクッキーを取得する</summary>
+        static async Task<string> GetNicovideoLoginCookieAsync(CancellationToken ct)
+        {
+            // メソッド実装にあたり nicologin (www.axfc.netの/u/4052467) および https://github.com/tsukumijima/NDGRClient を参考にした。
+
+            if (Settings.Instance.mail == null || Settings.Instance.password == null)
+            {
+                // ログイン情報が設定されていない
+                return null;
+            }
+            if (_nicovideoLoginChecked)
+            {
+                // チェックを省略
+                return Settings.Instance.nicovideo_cookie ?? "";
+            }
+            _nicovideoLoginChecked = true;
+
+            // クッキーを取得するため
+            var clientHandler = new HttpClientHandler { AutomaticDecompression = DecompressionMethods.All };
+
+            using (var client = new HttpClient(clientHandler) { Timeout = TimeSpan.FromSeconds(HttpGetTimeoutSec) })
+            {
+                client.DefaultRequestHeaders.Add("User-Agent", Settings.Instance.useragent ?? UserAgent);
+                // Add()だと値に無駄なスペースが挿入されるため
+                client.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+                // ユーザーがブラウザで直接アクセスするようなコンテキスト
+                client.DefaultRequestHeaders.Add("Cache-Control", "no-cache");
+                client.DefaultRequestHeaders.Add("Sec-Fetch-Dest", "document");
+                client.DefaultRequestHeaders.Add("Sec-Fetch-Mode", "navigate");
+                client.DefaultRequestHeaders.Add("Sec-Fetch-Site", "none");
+                client.DefaultRequestHeaders.Add("Sec-Fetch-User", "?1");
+                if (Settings.Instance.nicovideo_cookie != null)
+                {
+                    client.DefaultRequestHeaders.Add("Cookie", Settings.Instance.nicovideo_cookie);
+                }
+                HttpResponseMessage getResponse = await client.GetAsync("https://account.nicovideo.jp/login?site=niconico", ct);
+                if (getResponse.Headers.Contains("x-niconico-id"))
+                {
+                    // ログイン済み
+                    return Settings.Instance.nicovideo_cookie;
+                }
+                if (Settings.Instance.nicovideo_cookie != null)
+                {
+                    Settings.Instance.nicovideo_cookie = null;
+                    Settings.Instance.Save();
+                }
+
+                client.DefaultRequestHeaders.Clear();
+                client.DefaultRequestHeaders.Add("User-Agent", Settings.Instance.useragent ?? UserAgent);
+                // Add()だと値に無駄なスペースが挿入されるため
+                client.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+                // ログインページからフェッチするようなコンテキスト
+                client.DefaultRequestHeaders.Add("Cache-Control", "no-cache");
+                client.DefaultRequestHeaders.Add("Origin", "https://account.nicovideo.jp");
+                client.DefaultRequestHeaders.Add("Referer", "https://account.nicovideo.jp/login?site=niconico");
+                client.DefaultRequestHeaders.Add("Sec-Fetch-Dest", "document");
+                client.DefaultRequestHeaders.Add("Sec-Fetch-Mode", "navigate");
+                client.DefaultRequestHeaders.Add("Sec-Fetch-Site", "same-origin");
+                client.DefaultRequestHeaders.Add("Sec-Fetch-User", "?1");
+
+                // ログイン
+                var content = new FormUrlEncodedContent(new KeyValuePair<string, string>[]
+                {
+                    new KeyValuePair<string, string>("mail_tel", Settings.Instance.mail),
+                    new KeyValuePair<string, string>("password", Settings.Instance.password)
+                });
+                HttpResponseMessage postResponse = await client.PostAsync("https://account.nicovideo.jp/login/redirector?site=niconico", content, ct);
+                if (postResponse.IsSuccessStatusCode && postResponse.Headers.Contains("x-niconico-id"))
+                {
+                    // ログイン成功
+                    string cookie = "";
+                    foreach (Cookie item in clientHandler.CookieContainer.GetCookies(new Uri("https://live.nicovideo.jp/")))
+                    {
+                        if (item.Name == "nicosid" || item.Name == "user_session" || item.Name == "user_session_secure")
+                        {
+                            cookie += "; " + item;
+                        }
+                    }
+                    if (cookie.Length > 0)
+                    {
+                        Settings.Instance.nicovideo_cookie = cookie.Substring(2);
+                        Settings.Instance.Save();
+                    }
+                }
+            }
+            return Settings.Instance.nicovideo_cookie ?? "";
         }
 
         static async Task<string> HttpClientGetStringAsync(string requestUri, string cookie, CancellationToken ct)
