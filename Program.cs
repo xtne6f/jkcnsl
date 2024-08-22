@@ -25,6 +25,7 @@ namespace jkcnsl
         const int MaxAcceptableWebSocketPayloadSize = 32768;
         const int MaxAcceptableProtoBufChunkSize = 1048576;
         const int HttpGetTimeoutSec = 8;
+        const int WebSocketTimeoutSec = 15;
         const int MixedStreamReconnectionSec = 20;
 
         // HttpClientは使いまわす。クッキーは共有しない
@@ -415,10 +416,10 @@ namespace jkcnsl
                         watchSession.Options.SetRequestHeader("Cookie", cookie);
                     }
                     // 視聴セッションに接続
-                    await watchSession.ConnectAsync(new Uri(webSocketUrl), ct);
-                    await watchSession.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(
-                        "{\"type\":\"startWatching\",\"data\":{\"reconnect\":false}}")),
-                        WebSocketMessageType.Text, true, ct);
+                    await DoWebSocketAction(async ct => await watchSession.ConnectAsync(new Uri(webSocketUrl), ct), ct);
+                    await DoWebSocketAction(async ct => await watchSession.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(
+                                            "{\"type\":\"startWatching\",\"data\":{\"reconnect\":false}}")),
+                                            WebSocketMessageType.Text, true, ct), ct);
 
                     string viewUri = null;
                     var vposBaseUnixTime = TimeSpan.Zero;
@@ -447,7 +448,7 @@ namespace jkcnsl
                         {
                             if (!closed)
                             {
-                                await watchSession.CloseAsync(WebSocketCloseStatus.NormalClosure, "", ct);
+                                await DoWebSocketAction(async ct => await watchSession.CloseAsync(WebSocketCloseStatus.NormalClosure, "", ct), ct);
                                 closed = true;
                             }
                         };
@@ -460,7 +461,8 @@ namespace jkcnsl
                             {
                                 // 座席を維持
                                 Trace.WriteLine("keepSeat");
-                                await watchSession.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes("{\"type\":\"keepSeat\"}")), WebSocketMessageType.Text, true, ct);
+                                await DoWebSocketAction(async ct => await watchSession.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(
+                                                        "{\"type\":\"keepSeat\"}")), WebSocketMessageType.Text, true, ct), ct);
                                 keepSeatTick = Environment.TickCount & int.MaxValue;
                             }
 
@@ -530,7 +532,7 @@ namespace jkcnsl
                                             });
                                             byte[] post = ms.ToArray();
                                             Trace.WriteLine(Encoding.UTF8.GetString(post));
-                                            await watchSession.SendAsync(new ArraySegment<byte>(post), WebSocketMessageType.Text, true, ct);
+                                            await DoWebSocketAction(async ct => await watchSession.SendAsync(new ArraySegment<byte>(post), WebSocketMessageType.Text, true, ct), ct);
                                         }
                                         else
                                         {
@@ -734,7 +736,8 @@ namespace jkcnsl
                                     break;
                                 case "ping":
                                     Trace.WriteLine("ping-pong");
-                                    await watchSession.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes("{\"type\":\"pong\"}")), WebSocketMessageType.Text, true, ct);
+                                    await DoWebSocketAction(async ct => await watchSession.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(
+                                                            "{\"type\":\"pong\"}")), WebSocketMessageType.Text, true, ct), ct);
                                     break;
                                 case "postCommentResult":
                                     Trace.WriteLine("postCommentResult");
@@ -914,10 +917,10 @@ namespace jkcnsl
                     commentSession.Options.SetRequestHeader("User-Agent", Settings.Instance.useragent ?? UserAgent);
                     commentSession.Options.AddSubProtocol("msg.nicovideo.jp#json");
                     // 視聴セッションに接続
-                    await watchSession.ConnectAsync(new Uri(webSocketUrl), ct);
-                    await watchSession.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(
+                    await DoWebSocketAction(async ct => await watchSession.ConnectAsync(new Uri(webSocketUrl), ct), ct);
+                    await DoWebSocketAction(async ct => await watchSession.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(
                         "{\"type\":\"startWatching\",\"data\":{\"room\":{\"protocol\":\"webSocket\",\"commentable\":true},\"reconnect\":false}}")),
-                        WebSocketMessageType.Text, true, ct);
+                        WebSocketMessageType.Text, true, ct), ct);
 
                     var vposBaseUnixTime = TimeSpan.Zero;
                     int keepSeatIntervalSec = 0;
@@ -950,9 +953,9 @@ namespace jkcnsl
                             {
                                 if (commentRecvTask != null)
                                 {
-                                    await commentSession.CloseAsync(WebSocketCloseStatus.NormalClosure, "", ct);
+                                    await DoWebSocketAction(async ct => await commentSession.CloseAsync(WebSocketCloseStatus.NormalClosure, "", ct), ct);
                                 }
-                                await watchSession.CloseAsync(WebSocketCloseStatus.NormalClosure, "", ct);
+                                await DoWebSocketAction(async ct => await watchSession.CloseAsync(WebSocketCloseStatus.NormalClosure, "", ct), ct);
                                 closed = true;
                             }
                         };
@@ -966,14 +969,15 @@ namespace jkcnsl
                             {
                                 // 座席を維持
                                 Trace.WriteLine("keepSeat");
-                                await watchSession.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes("{\"type\":\"keepSeat\"}")), WebSocketMessageType.Text, true, ct);
+                                await DoWebSocketAction(async ct => await watchSession.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(
+                                                        "{\"type\":\"keepSeat\"}")), WebSocketMessageType.Text, true, ct), ct);
                                 keepSeatTick = Environment.TickCount & int.MaxValue;
                             }
                             else if (commentConnected && commentKeepElapsed > 60000)
                             {
                                 // 60秒ごとに接続を維持
                                 Trace.WriteLine("commentKeep");
-                                await commentSession.SendAsync(new ArraySegment<byte>(new byte[0]), WebSocketMessageType.Text, true, ct);
+                                await DoWebSocketAction(async ct => await commentSession.SendAsync(new ArraySegment<byte>(new byte[0]), WebSocketMessageType.Text, true, ct), ct);
                                 commentKeepTick = Environment.TickCount & int.MaxValue;
                             }
 
@@ -1026,7 +1030,7 @@ namespace jkcnsl
                                             });
                                             byte[] post = ms.ToArray();
                                             Trace.WriteLine(Encoding.UTF8.GetString(post));
-                                            await watchSession.SendAsync(new ArraySegment<byte>(post), WebSocketMessageType.Text, true, ct);
+                                            await DoWebSocketAction(async ct => await watchSession.SendAsync(new ArraySegment<byte>(post), WebSocketMessageType.Text, true, ct), ct);
                                         }
                                         else
                                         {
@@ -1099,7 +1103,8 @@ namespace jkcnsl
                                     break;
                                 case "ping":
                                     Trace.WriteLine("ping-pong");
-                                    await watchSession.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes("{\"type\":\"pong\"}")), WebSocketMessageType.Text, true, ct);
+                                    await DoWebSocketAction(async ct => await watchSession.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(
+                                                            "{\"type\":\"pong\"}")), WebSocketMessageType.Text, true, ct), ct);
                                     break;
                                 case "postCommentResult":
                                     Trace.WriteLine("postCommentResult");
@@ -1149,8 +1154,8 @@ namespace jkcnsl
                                                     new CommentSessionOpen() { ping = new ContentContainer() { content = "rf: 0" } }
                                                 });
                                                 // コメントセッションに接続
-                                                await commentSession.ConnectAsync(new Uri(room.messageServer.uri), ct);
-                                                await commentSession.SendAsync(new ArraySegment<byte>(ms.ToArray()), WebSocketMessageType.Text, true, ct);
+                                                await DoWebSocketAction(async ct => await commentSession.ConnectAsync(new Uri(room.messageServer.uri), ct), ct);
+                                                await DoWebSocketAction(async ct => await commentSession.SendAsync(new ArraySegment<byte>(ms.ToArray()), WebSocketMessageType.Text, true, ct), ct);
                                                 commentConnected = true;
                                                 commentKeepTick = Environment.TickCount & int.MaxValue;
                                             }
@@ -1338,6 +1343,27 @@ namespace jkcnsl
             }
             ms.Position = 0;
             return ms;
+        }
+
+        static async Task DoWebSocketAction(Func<CancellationToken, Task> actionAsync, CancellationToken ct)
+        {
+            using (var timeoutCts = new CancellationTokenSource())
+            using (var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token))
+            {
+                var task = actionAsync(linkedCts.Token);
+                var delayTask = Task.Delay(WebSocketTimeoutSec * 1000, linkedCts.Token);
+                await Task.WhenAny(new Task[] { task, delayTask });
+                timeoutCts.Cancel();
+                try
+                {
+                    await delayTask;
+                }
+                catch { }
+
+                // タイムアウト時はここでOperationCanceledExceptionなどが飛ぶ
+                // TimeoutExceptionあたりに変換したほうが分かりやすいが今のところ不都合はないのでそのまま
+                await task;
+            }
         }
 
         static bool ParsePostComment(string comm, out string dest, out string color, out string font, out bool isAnonymous, out string position, out string size, out string text)
