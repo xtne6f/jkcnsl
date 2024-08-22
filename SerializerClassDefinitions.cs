@@ -27,14 +27,8 @@ namespace jkcnsl
 
     public class WatchEmbedded
     {
-        public WatchEmbeddedProgram program { get; set; }
         public WatchEmbeddedSite site { get; set; }
         public WatchEmbeddedUser user { get; set; }
-    }
-
-    public class WatchEmbeddedProgram
-    {
-        public double vposBaseTime { get; set; }
     }
 
     public class WatchEmbeddedSite
@@ -64,6 +58,11 @@ namespace jkcnsl
         public WatchSessionResultError data { get; set; }
     }
 
+    public class WatchSessionResultForMessageServer
+    {
+        public WatchSessionResultMessageServer data { get; set; }
+    }
+
     public class WatchSessionResultForRoom
     {
         public WatchSessionResultRoom data { get; set; }
@@ -74,14 +73,31 @@ namespace jkcnsl
         public WatchSessionResultSeat data { get; set; }
     }
 
+    public class WatchSessionResultForServerTime
+    {
+        public WatchSessionResultServerTime data { get; set; }
+    }
+
     public class WatchSessionResultError
     {
         public string code { get; set; }
     }
 
+    public class WatchSessionResultMessageServer
+    {
+        public string viewUri { get; set; }
+        public string vposBaseTime { get; set; }
+        public string hashedUserId { get; set; }
+    }
+
+    public class WatchSessionResultServerTime
+    {
+        public string currentMs { get; set; }
+    }
+
     public class WatchSessionResultRoom
     {
-        public WatchSessionResultMessageServer messageServer { get; set; }
+        public WatchSessionResultRoomMessageServer messageServer { get; set; }
         public string threadId { get; set; }
         public string yourPostKey { get; set; }
         public string vposBaseTime { get; set; }
@@ -92,7 +108,7 @@ namespace jkcnsl
         public double keepIntervalSec { get; set; }
     }
 
-    public class WatchSessionResultMessageServer
+    public class WatchSessionResultRoomMessageServer
     {
         public string uri { get; set; }
     }

@@ -4,8 +4,7 @@
 おもにニコニコ実況のコメントを取得する非公式のコマンドラインツールです。
 
 ■使い方など
-.NETアプリなので(FrameworkでもビルドできますがClientWebSocketに決定的なバグがあ
-り使えません)、ビルドは各種のシェルでプロジェクトフォルダに移動し、
+.NETアプリなのでビルドは各種のシェルでプロジェクトフォルダに移動し、
 > dotnet publish -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true /p:PublishTrimmed=true
 などとしてください。
 動作環境はWindowsではWindows10以降と思います。
@@ -34,3 +33,7 @@ https://github.com/n-air-app/nicolive-comment-protobuf/tree/bf66a84370db5785cd36
 実装にあたり特に https://github.com/tsukumijima/TVRemotePlus および
 https://github.com/asannou/namami を参考にしました。とりわけ変数名など多くのアイ
 デアをTVRemotePlusから借用しています。
+
+2024年以降の新方式のニコニコ実況への対応にあたり特に
+https://github.com/tsukumijima/NDGRClient および
+https://github.com/noriokun4649/TVTComment を参考にしました。
