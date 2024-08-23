@@ -930,6 +930,14 @@ namespace jkcnsl
                 }
                 finally
                 {
+                    // タスクをすべて回収
+                    closeCts.Cancel();
+                    try
+                    {
+                        await Task.WhenAll((new Task[] { pollingTask, watchRecvTask, entryTask, segmentTask, prefetchTask }).Where(a => a != null));
+                    }
+                    catch { }
+
                     // HTTPストリームはusingしていないのでここで閉じる
                     if (prefetchStream != null)
                     {
@@ -943,13 +951,6 @@ namespace jkcnsl
                     {
                         entryStream.Close();
                     }
-                    // タスクをすべて回収
-                    closeCts.Cancel();
-                    try
-                    {
-                        await Task.WhenAll((new Task[] { pollingTask, watchRecvTask, entryTask, segmentTask, prefetchTask }).Where(a => a != null));
-                    }
-                    catch { }
                 }
             }
             return ".";
@@ -1541,22 +1542,12 @@ namespace jkcnsl
 
         static async Task DoWebSocketAction(Func<CancellationToken, Task> actionAsync, CancellationToken ct)
         {
-            using (var timeoutCts = new CancellationTokenSource())
-            using (var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token))
+            using (var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct))
             {
-                var task = actionAsync(linkedCts.Token);
-                var delayTask = Task.Delay(WebSocketTimeoutSec * 1000, linkedCts.Token);
-                await Task.WhenAny(new Task[] { task, delayTask });
-                timeoutCts.Cancel();
-                try
-                {
-                    await delayTask;
-                }
-                catch { }
-
+                linkedCts.CancelAfter(WebSocketTimeoutSec * 1000);
                 // タイムアウト時はここでOperationCanceledExceptionなどが飛ぶ
                 // TimeoutExceptionあたりに変換したほうが分かりやすいが今のところ不都合はないのでそのまま
-                await task;
+                await actionAsync(linkedCts.Token);
             }
         }
 
