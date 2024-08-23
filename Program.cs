@@ -791,7 +791,7 @@ namespace jkcnsl
 
                                             // 適当なタグをでっちあげてxmlに変換。本来の"room"メッセージは廃止された
                                             ResponseLines.Add(("-<x_room" +
-                                                " thread_id=\"" + lvId + "\"" +
+                                                " thread_id=\"" + lvId + "_" + (long)vposBaseUnixTime.TotalSeconds + "\"" +
                                                 (hashedUserId != null ? " hashed_user_id=\"" + HtmlEncodeAmpLtGt(hashedUserId, true) + "\"" : "") +
                                                 (embeddedUser != null && embeddedUser.id != null ? " user_id=\"" + HtmlEncodeAmpLtGt(embeddedUser.id, true) + "\"" : "") +
                                                 (embeddedUser != null && embeddedUser.nickname != null ? " nickname=\"" + HtmlEncodeAmpLtGt(embeddedUser.nickname, true) + "\"" : "") +
@@ -1275,6 +1275,11 @@ namespace jkcnsl
                                     {
                                         // 適当なタグをでっちあげて過去のコメントの出力終了を通知
                                         ResponseLines.Add("-<x_past_chat_end refuge=\"1\" />");
+                                        if (!mixingInfo.dropForwardedChat)
+                                        {
+                                            // インポートされたコメントにたいする通知も必要
+                                            ResponseLines.Add("-<x_past_chat_end />");
+                                        }
                                     }
                                     wroteFirstChat = true;
                                     wroteLiveChat = true;
@@ -1283,6 +1288,11 @@ namespace jkcnsl
                                 {
                                     // 適当なタグをでっちあげて過去のコメントの出力開始を通知
                                     ResponseLines.Add("-<x_past_chat_begin refuge=\"1\" />");
+                                    if (!mixingInfo.dropForwardedChat)
+                                    {
+                                        // インポートされたコメントにたいする通知も必要
+                                        ResponseLines.Add("-<x_past_chat_begin />");
+                                    }
                                     wroteFirstChat = true;
                                 }
                                 // 混合時は不整合を避けるため片方のサーバ時刻をdate属性値に使う
