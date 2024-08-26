@@ -2,7 +2,6 @@
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.Serialization;
-using System.Runtime.Serialization.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
@@ -44,7 +43,7 @@ namespace jkcnsl
                 {
                     using (var fs = new FileStream(Path.Join(AppContext.BaseDirectory, "jkcnsl.json"), FileMode.Open, FileAccess.Read))
                     {
-                        settings = (Settings)new DataContractJsonSerializer(typeof(Settings)).ReadObject(fs);
+                        settings = new DataContractJsonSerializerWrapper<Settings>().ReadValue(fs);
                     }
                     break;
                 }
@@ -94,7 +93,7 @@ namespace jkcnsl
                 {
                     using (var fs = new FileStream(Path.Join(AppContext.BaseDirectory, "jkcnsl.json"), FileMode.Create, FileAccess.Write, FileShare.None))
                     {
-                        new DataContractJsonSerializer(typeof(Settings)).WriteObject(fs, settings);
+                        new DataContractJsonSerializerWrapper<Settings>().WriteValue(fs, settings);
                     }
                     break;
                 }

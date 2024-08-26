@@ -8,8 +8,6 @@
 > dotnet publish -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true /p:PublishTrimmed=true
 などとしてください。
 動作環境はWindowsではWindows10以降と思います。
-2024年7月時点の.NET 8では /p:PublishTrimmed=true をつけるとビルドはできるが正常
-動作しないバイナリができるので、その場合はこのオプションを取り除いてください。
 
 jkcnslを起動して、
 > Lch???<改行> (←???は実況の番号)

@@ -9,7 +9,6 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.WebSockets;
-using System.Runtime.Serialization.Json;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -425,8 +424,8 @@ namespace jkcnsl
                         match = Regex.Match(match.Groups[1].Value, " data-props=\"([^\"]*)\"");
                         if (match.Success)
                         {
-                            var js = new DataContractJsonSerializer(typeof(WatchEmbedded));
-                            var embedded = (WatchEmbedded)js.ReadObject(new MemoryStream(Encoding.UTF8.GetBytes(HttpUtility.HtmlDecode(match.Groups[1].Value))));
+                            var js = new DataContractJsonSerializerWrapper<WatchEmbedded>();
+                            WatchEmbedded embedded = js.ReadValue(Encoding.UTF8.GetBytes(HttpUtility.HtmlDecode(match.Groups[1].Value)));
                             // 一応ドメインを検査しておく(スクレイピングなので。また、cookieを送信するため)
                             if (embedded.site != null && embedded.site.relive != null &&
                                 Regex.IsMatch(embedded.site.relive.webSocketUrl ?? "", @"^wss://[0-9A-Za-z.-]+\.nicovideo\.jp/"))
@@ -502,12 +501,12 @@ namespace jkcnsl
                     bool wroteFirstChat = false;
                     bool wroteLiveChat = false;
 
-                    var jsWatchSessionPost = new DataContractJsonSerializer(typeof(WatchSessionPost));
-                    var jsWatchSessionResult = new DataContractJsonSerializer(typeof(WatchSessionResult));
-                    var jsWatchSessionResultForError = new DataContractJsonSerializer(typeof(WatchSessionResultForError));
-                    var jsWatchSessionResultForMessageServer = new DataContractJsonSerializer(typeof(WatchSessionResultForMessageServer));
-                    var jsWatchSessionResultForSeat = new DataContractJsonSerializer(typeof(WatchSessionResultForSeat));
-                    var jsWatchSessionResultForServerTime = new DataContractJsonSerializer(typeof(WatchSessionResultForServerTime));
+                    var jsWatchSessionPost = new DataContractJsonSerializerWrapper<WatchSessionPost>();
+                    var jsWatchSessionResult = new DataContractJsonSerializerWrapper<WatchSessionResult>();
+                    var jsWatchSessionResultForError = new DataContractJsonSerializerWrapper<WatchSessionResultForError>();
+                    var jsWatchSessionResultForMessageServer = new DataContractJsonSerializerWrapper<WatchSessionResultForMessageServer>();
+                    var jsWatchSessionResultForSeat = new DataContractJsonSerializerWrapper<WatchSessionResultForSeat>();
+                    var jsWatchSessionResultForServerTime = new DataContractJsonSerializerWrapper<WatchSessionResultForServerTime>();
 
                     string nextAt = "now";
                     bool closed = false;
@@ -585,7 +584,7 @@ namespace jkcnsl
                                             // vposは10msec単位。内部時計のずれに影響されないようにサーバ時刻を基準に補正
                                             int vpos = (int)(serverUnixTime - vposBaseUnixTime).TotalSeconds * 100 + (((Environment.TickCount & int.MaxValue) - serverUnixTimeTick) & int.MaxValue) / 10;
                                             var ms = new MemoryStream();
-                                            jsWatchSessionPost.WriteObject(ms, new WatchSessionPost()
+                                            jsWatchSessionPost.WriteValue(ms, new WatchSessionPost()
                                             {
                                                 data = new WatchSessionPostData()
                                                 {
@@ -747,7 +746,7 @@ namespace jkcnsl
 
                         if (watchReceived)
                         {
-                            var message = (WatchSessionResult)jsWatchSessionResult.ReadObject(new MemoryStream(watchBuf, 0, watchCount));
+                            WatchSessionResult message = jsWatchSessionResult.ReadValue(watchBuf, 0, watchCount);
                             switch (message.type)
                             {
                                 case "disconnect":
@@ -759,7 +758,7 @@ namespace jkcnsl
                                 case "error":
                                     Trace.WriteLine("error");
                                     {
-                                        var error = ((WatchSessionResultForError)jsWatchSessionResultForError.ReadObject(new MemoryStream(watchBuf, 0, watchCount))).data;
+                                        WatchSessionResultError error = jsWatchSessionResultForError.ReadValue(watchBuf, 0, watchCount).data;
                                         if (error != null)
                                         {
                                             Trace.WriteLine(Encoding.UTF8.GetString(watchBuf, 0, watchCount));
@@ -778,7 +777,7 @@ namespace jkcnsl
                                     Trace.WriteLine("messageServer");
                                     // メッセージサーバの接続先情報
                                     {
-                                        var messageServer = ((WatchSessionResultForMessageServer)jsWatchSessionResultForMessageServer.ReadObject(new MemoryStream(watchBuf, 0, watchCount))).data;
+                                        WatchSessionResultMessageServer messageServer = jsWatchSessionResultForMessageServer.ReadValue(watchBuf, 0, watchCount).data;
                                         if (messageServer != null)
                                         {
                                             if (messageServer.vposBaseTime != null && vposBaseUnixTime <= TimeSpan.Zero)
@@ -816,7 +815,7 @@ namespace jkcnsl
                                 case "seat":
                                     Trace.WriteLine("seat");
                                     {
-                                        var seat = ((WatchSessionResultForSeat)jsWatchSessionResultForSeat.ReadObject(new MemoryStream(watchBuf, 0, watchCount))).data;
+                                        WatchSessionResultSeat seat = jsWatchSessionResultForSeat.ReadValue(watchBuf, 0, watchCount).data;
                                         if (seat != null)
                                         {
                                             keepSeatIntervalSec = Math.Min((int)seat.keepIntervalSec, 1000);
@@ -827,7 +826,7 @@ namespace jkcnsl
                                 case "serverTime":
                                     Trace.WriteLine("serverTime");
                                     {
-                                        var serverTime = ((WatchSessionResultForServerTime)jsWatchSessionResultForServerTime.ReadObject(new MemoryStream(watchBuf, 0, watchCount))).data;
+                                        WatchSessionResultServerTime serverTime = jsWatchSessionResultForServerTime.ReadValue(watchBuf, 0, watchCount).data;
                                         if (serverTime != null && serverTime.currentMs != null)
                                         {
                                             DateTime d;
@@ -1006,13 +1005,13 @@ namespace jkcnsl
                     bool wroteFirstChat = false;
                     bool wroteLiveChat = false;
 
-                    var jsWatchSessionPost = new DataContractJsonSerializer(typeof(WatchSessionPost));
-                    var jsWatchSessionResult = new DataContractJsonSerializer(typeof(WatchSessionResult));
-                    var jsWatchSessionResultForError = new DataContractJsonSerializer(typeof(WatchSessionResultForError));
-                    var jsWatchSessionResultForRoom = new DataContractJsonSerializer(typeof(WatchSessionResultForRoom));
-                    var jsWatchSessionResultForSeat = new DataContractJsonSerializer(typeof(WatchSessionResultForSeat));
-                    var jsWatchSessionResultForServerTime = new DataContractJsonSerializer(typeof(WatchSessionResultForServerTime));
-                    var jsCommentSessionResult = new DataContractJsonSerializer(typeof(CommentSessionResult));
+                    var jsWatchSessionPost = new DataContractJsonSerializerWrapper<WatchSessionPost>();
+                    var jsWatchSessionResult = new DataContractJsonSerializerWrapper<WatchSessionResult>();
+                    var jsWatchSessionResultForError = new DataContractJsonSerializerWrapper<WatchSessionResultForError>();
+                    var jsWatchSessionResultForRoom = new DataContractJsonSerializerWrapper<WatchSessionResultForRoom>();
+                    var jsWatchSessionResultForSeat = new DataContractJsonSerializerWrapper<WatchSessionResultForSeat>();
+                    var jsWatchSessionResultForServerTime = new DataContractJsonSerializerWrapper<WatchSessionResultForServerTime>();
+                    var jsCommentSessionResult = new DataContractJsonSerializerWrapper<CommentSessionResult>();
 
                     bool closed = false;
                     while (!closed)
@@ -1084,7 +1083,7 @@ namespace jkcnsl
                                             // vposは10msec単位。内部時計のずれに影響されないようにサーバ時刻を基準に補正
                                             int vpos = (int)(serverUnixTime - vposBaseUnixTime).TotalSeconds * 100 + (((Environment.TickCount & int.MaxValue) - serverUnixTimeTick) & int.MaxValue) / 10;
                                             var ms = new MemoryStream();
-                                            jsWatchSessionPost.WriteObject(ms, new WatchSessionPost()
+                                            jsWatchSessionPost.WriteValue(ms, new WatchSessionPost()
                                             {
                                                 data = new WatchSessionPostData()
                                                 {
@@ -1144,7 +1143,7 @@ namespace jkcnsl
 
                         if (watchReceived)
                         {
-                            var message = (WatchSessionResult)jsWatchSessionResult.ReadObject(new MemoryStream(watchBuf, 0, watchCount));
+                            WatchSessionResult message = jsWatchSessionResult.ReadValue(watchBuf, 0, watchCount);
                             switch (message.type)
                             {
                                 case "disconnect":
@@ -1156,7 +1155,7 @@ namespace jkcnsl
                                 case "error":
                                     Trace.WriteLine("error");
                                     {
-                                        var error = ((WatchSessionResultForError)jsWatchSessionResultForError.ReadObject(new MemoryStream(watchBuf, 0, watchCount))).data;
+                                        WatchSessionResultError error = jsWatchSessionResultForError.ReadValue(watchBuf, 0, watchCount).data;
                                         if (error != null)
                                         {
                                             Trace.WriteLine(Encoding.UTF8.GetString(watchBuf, 0, watchCount));
@@ -1185,7 +1184,7 @@ namespace jkcnsl
                                     Trace.WriteLine("room");
                                     if (!commentConnected)
                                     {
-                                        var room = ((WatchSessionResultForRoom)jsWatchSessionResultForRoom.ReadObject(new MemoryStream(watchBuf, 0, watchCount))).data;
+                                        WatchSessionResultRoom room = jsWatchSessionResultForRoom.ReadValue(watchBuf, 0, watchCount).data;
                                         if (room != null)
                                         {
                                             // 適当なタグをでっちあげてxmlに変換
@@ -1207,9 +1206,9 @@ namespace jkcnsl
                                             if (room.threadId != null && room.messageServer != null && room.messageServer.uri != null &&
                                                 room.messageServer.uri.StartsWith("wss://", StringComparison.Ordinal))
                                             {
-                                                var js = new DataContractJsonSerializer(typeof(List<CommentSessionOpen>));
+                                                var js = new DataContractJsonSerializerWrapper<List<CommentSessionOpen>>();
                                                 var ms = new MemoryStream();
-                                                js.WriteObject(ms, new List<CommentSessionOpen>()
+                                                js.WriteValue(ms, new List<CommentSessionOpen>()
                                                 {
                                                     new CommentSessionOpen() { ping = new ContentContainer() { content = "rs: 0" } },
                                                     new CommentSessionOpen() { ping = new ContentContainer() { content = "ps: 0" } },
@@ -1235,7 +1234,7 @@ namespace jkcnsl
                                 case "seat":
                                     Trace.WriteLine("seat");
                                     {
-                                        var seat = ((WatchSessionResultForSeat)jsWatchSessionResultForSeat.ReadObject(new MemoryStream(watchBuf, 0, watchCount))).data;
+                                        WatchSessionResultSeat seat = jsWatchSessionResultForSeat.ReadValue(watchBuf, 0, watchCount).data;
                                         if (seat != null)
                                         {
                                             keepSeatIntervalSec = Math.Min((int)seat.keepIntervalSec, 1000);
@@ -1246,7 +1245,7 @@ namespace jkcnsl
                                 case "serverTime":
                                     Trace.WriteLine("serverTime");
                                     {
-                                        var serverTime = ((WatchSessionResultForServerTime)jsWatchSessionResultForServerTime.ReadObject(new MemoryStream(watchBuf, 0, watchCount))).data;
+                                        WatchSessionResultServerTime serverTime = jsWatchSessionResultForServerTime.ReadValue(watchBuf, 0, watchCount).data;
                                         if (serverTime != null && serverTime.currentMs != null)
                                         {
                                             DateTime d;
@@ -1267,7 +1266,7 @@ namespace jkcnsl
                         if (commentReceived)
                         {
                             // jsonをxmlに変換(もっと賢い方法ありそうだが属性の順序など維持したいので…)
-                            var message = (CommentSessionResult)jsCommentSessionResult.ReadObject(new MemoryStream(commentBuf, 0, commentCount));
+                            CommentSessionResult message = jsCommentSessionResult.ReadValue(commentBuf, 0, commentCount);
                             if (message.chat != null && serverUnixTime > TimeSpan.Zero)
                             {
                                 TimeSpan at = TimeSpan.FromSeconds((long)message.chat.date) + TimeSpan.FromMicroseconds((long)message.chat.date_usec);

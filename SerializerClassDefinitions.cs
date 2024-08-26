@@ -1,5 +1,7 @@
 ﻿using System.Collections.Generic;
+using System.IO;
 using System.Runtime.Serialization;
+using System.Runtime.Serialization.Json;
 
 namespace jkcnsl
 {
@@ -204,5 +206,34 @@ namespace jkcnsl
     public class ContentContainer
     {
         public string content { get; set; }
+    }
+
+    /// <summary>
+    /// DataContractJsonSerializerのジェネリックなラッパー
+    /// トリミング(PublishTrimmed)する場合は型Tがトリム対象にならないよう注意
+    /// </summary>
+    class DataContractJsonSerializerWrapper<T>
+    {
+        readonly DataContractJsonSerializer _js = new DataContractJsonSerializer(typeof(T));
+
+        public T ReadValue(Stream s)
+        {
+            return (T)_js.ReadObject(s);
+        }
+
+        public T ReadValue(byte[] buf)
+        {
+            return ReadValue(new MemoryStream(buf));
+        }
+
+        public T ReadValue(byte[] buf, int index, int count)
+        {
+            return ReadValue(new MemoryStream(buf, index, count));
+        }
+
+        public void WriteValue(Stream s, T val)
+        {
+            _js.WriteObject(s, val);
+        }
     }
 }
