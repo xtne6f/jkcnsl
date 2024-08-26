@@ -492,6 +492,9 @@ namespace jkcnsl
                     string hashedUserId = null;
                     int keepSeatIntervalSec = 0;
                     int keepSeatTick = 0;
+                    var readEntryBuf = new byte[512];
+                    var readSegmentBuf = new byte[512];
+                    var readPrefetchBuf = new byte[512];
                     var watchBuf = new byte[MaxAcceptableWebSocketPayloadSize];
                     int watchCount = 0;
                     var serverUnixTime = TimeSpan.Zero;
@@ -629,7 +632,7 @@ namespace jkcnsl
                                 {
                                     // プレイリスト接続完了
                                     entryStream = await (Task<Stream>)entryTask;
-                                    entryTask = ReadProtoBufChunkAsync(entryStream, msEntry, linkedCts.Token);
+                                    entryTask = ReadProtoBufChunkAsync(entryStream, msEntry, readEntryBuf, linkedCts.Token);
                                 }
                                 else
                                 {
@@ -677,7 +680,7 @@ namespace jkcnsl
                                                 Trace.WriteLine("Prefetch started");
                                             }
                                         }
-                                        entryTask = ReadProtoBufChunkAsync(entryStream, msEntry, linkedCts.Token);
+                                        entryTask = ReadProtoBufChunkAsync(entryStream, msEntry, readEntryBuf, linkedCts.Token);
                                     }
                                 }
                             }
@@ -687,7 +690,7 @@ namespace jkcnsl
                                 {
                                     // セグメント接続完了
                                     segmentStream = await (Task<Stream>)segmentTask;
-                                    segmentTask = ReadProtoBufChunkAsync(segmentStream, msSegment, linkedCts.Token);
+                                    segmentTask = ReadProtoBufChunkAsync(segmentStream, msSegment, readSegmentBuf, linkedCts.Token);
                                 }
                                 else
                                 {
@@ -707,13 +710,13 @@ namespace jkcnsl
                                         {
                                             // プリフェッチ済み
                                             chunkedMessage = ProtoBuf.Serializer.Deserialize<ChunkedMessage>(msPrefetch);
-                                            segmentTask = ReadProtoBufChunkAsync(segmentStream, msSegment, linkedCts.Token);
+                                            segmentTask = ReadProtoBufChunkAsync(segmentStream, msSegment, readSegmentBuf, linkedCts.Token);
                                         }
                                     }
                                     else
                                     {
                                         chunkedMessage = ProtoBuf.Serializer.Deserialize<ChunkedMessage>(ms);
-                                        segmentTask = ReadProtoBufChunkAsync(segmentStream, msSegment, linkedCts.Token);
+                                        segmentTask = ReadProtoBufChunkAsync(segmentStream, msSegment, readSegmentBuf, linkedCts.Token);
                                     }
                                 }
                             }
@@ -723,7 +726,7 @@ namespace jkcnsl
                                 {
                                     // プリフェッチセグメント接続完了
                                     prefetchStream = await (Task<Stream>)prefetchTask;
-                                    prefetchTask = ReadProtoBufChunkAsync(prefetchStream, msPrefetch, linkedCts.Token);
+                                    prefetchTask = ReadProtoBufChunkAsync(prefetchStream, msPrefetch, readPrefetchBuf, linkedCts.Token);
                                 }
                                 else if (await (Task<MemoryStream>)prefetchTask == null)
                                 {
@@ -1515,16 +1518,16 @@ namespace jkcnsl
             return encodeQuot ? s.Replace("\"", "&quot;") : s;
         }
 
-        static async Task<MemoryStream> ReadProtoBufChunkAsync(Stream s, MemoryStream ms, CancellationToken ct)
+        static async Task<MemoryStream> ReadProtoBufChunkAsync(Stream s, MemoryStream ms, byte[] buf, CancellationToken ct)
         {
             ms.SetLength(0);
-            var b = new byte[1] { 255 };
+            buf[0] = 255;
             // 可変長整数の終わりまで読む
-            for (int i = 0; i < 5 && b[0] >= 128 && await s.ReadAsync(b, ct) == 1; i++)
+            for (int i = 0; i < 5 && buf[0] >= 128 && await s.ReadAsync(buf, 0, 1, ct) > 0; i++)
             {
-                ms.WriteByte(b[0]);
+                ms.WriteByte(buf[0]);
             }
-            if (b[0] >= 128)
+            if (buf[0] >= 128)
             {
                 // 終端または値が大きすぎる
                 return null;
@@ -1537,14 +1540,16 @@ namespace jkcnsl
                 return null;
             }
             ms.SetLength(0);
-            for (; len > 0 && await s.ReadAsync(b, ct) == 1; len--)
+            while (len > 0)
             {
-                ms.WriteByte(b[0]);
-            }
-            if (len > 0)
-            {
-                // 終端
-                return null;
+                int readLen = await s.ReadAsync(buf, 0, Math.Min(len, buf.Length), ct);
+                if (readLen <= 0)
+                {
+                    // 終端
+                    return null;
+                }
+                ms.Write(buf, 0, readLen);
+                len -= readLen;
             }
             ms.Position = 0;
             return ms;
