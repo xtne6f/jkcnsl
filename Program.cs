@@ -20,7 +20,12 @@ namespace jkcnsl
     class Program
     {
         const string UserAgent = "Mozilla/5.0";
+        static readonly string DeviceName = "Console (" +
+            (OperatingSystem.IsWindows() ? "Windows" :
+             OperatingSystem.IsMacOS() ? "Mac" :
+             OperatingSystem.IsLinux() ? "Linux" : "Unknown") + ")";
 
+        const int LoginAttemptIntervalSec = 3600;
         const int MaxAcceptableWebSocketPayloadSize = 32768;
         const int MaxAcceptableProtoBufChunkSize = 1048576;
         const int HttpGetTimeoutSec = 8;
@@ -131,7 +136,7 @@ namespace jkcnsl
                             case 'A':
                                 if (comm == "Ai")
                                 {
-                                    await NicovideoLoginAsync(quitCts.Token);
+                                    await NicovideoLoginAsync(commands, quitCts.Token);
                                 }
                                 else if (comm == "Ao")
                                 {
@@ -183,21 +188,36 @@ namespace jkcnsl
                                             // クッキーを削除
                                             _nicovideoLoginChecked = false;
                                             Settings.Instance.nicovideo_cookie = null;
+                                            Settings.Instance.last_login_attempt = 0;
+                                        }
+                                        else if (arg[0] == "nicovideo_mfa_cookie")
+                                        {
+                                            _nicovideoLoginChecked = false;
+                                            Settings.Instance.nicovideo_mfa_cookie = null;
+                                            Settings.Instance.last_login_attempt = 0;
                                         }
                                         else if (arg[0] == "mail")
                                         {
                                             // 設定を削除
                                             Settings.Instance.nicovideo_cookie = null;
+                                            Settings.Instance.nicovideo_mfa_cookie = null;
                                             Settings.Instance.mail = null;
+                                            Settings.Instance.last_login_attempt = 0;
                                         }
                                         else if (arg[0] == "password")
                                         {
                                             Settings.Instance.nicovideo_cookie = null;
+                                            Settings.Instance.nicovideo_mfa_cookie = null;
                                             Settings.Instance.password = null;
+                                            Settings.Instance.last_login_attempt = 0;
                                         }
                                         else if (arg[0] == "useragent")
                                         {
                                             Settings.Instance.useragent = null;
+                                        }
+                                        else if (arg[0] == "device_name")
+                                        {
+                                            Settings.Instance.device_name = null;
                                         }
                                         else if (arg[0].Length == 0)
                                         {
@@ -205,6 +225,10 @@ namespace jkcnsl
                                             if (Settings.Instance.nicovideo_cookie != null)
                                             {
                                                 ResponseLines.Add("-nicovideo_cookie " + Settings.Instance.nicovideo_cookie);
+                                            }
+                                            if (Settings.Instance.nicovideo_mfa_cookie != null)
+                                            {
+                                                ResponseLines.Add("-nicovideo_mfa_cookie " + Settings.Instance.nicovideo_mfa_cookie);
                                             }
                                             if (Settings.Instance.mail != null)
                                             {
@@ -221,6 +245,9 @@ namespace jkcnsl
                                                 ResponseLines.Add("-password " + maskedPassword);
                                             }
                                             ResponseLines.Add("-useragent " + (Settings.Instance.useragent ?? UserAgent));
+                                            ResponseLines.Add("-device_name " + (Settings.Instance.device_name ?? DeviceName));
+                                            ResponseLines.Add("-trust_device " + (Settings.Instance.distrust_device ? "false" : "true"));
+                                            ResponseLines.Add("-last_login_attempt " + Settings.Instance.last_login_attempt);
                                             ResponseLines.Add(".");
                                             break;
                                         }
@@ -237,17 +264,29 @@ namespace jkcnsl
                                         {
                                             _nicovideoLoginChecked = false;
                                             Settings.Instance.nicovideo_cookie = null;
+                                            Settings.Instance.nicovideo_mfa_cookie = null;
                                             Settings.Instance.mail = arg[1];
+                                            Settings.Instance.last_login_attempt = 0;
                                         }
                                         else if (arg[0] == "password")
                                         {
                                             _nicovideoLoginChecked = false;
                                             Settings.Instance.nicovideo_cookie = null;
+                                            Settings.Instance.nicovideo_mfa_cookie = null;
                                             Settings.Instance.password = arg[1];
+                                            Settings.Instance.last_login_attempt = 0;
                                         }
                                         else if (arg[0] == "useragent")
                                         {
                                             Settings.Instance.useragent = arg[1];
+                                        }
+                                        else if (arg[0] == "device_name")
+                                        {
+                                            Settings.Instance.device_name = arg[1];
+                                        }
+                                        else if (arg[0] == "trust_device")
+                                        {
+                                            Settings.Instance.distrust_device = arg[1] != "true";
                                         }
                                         else
                                         {
@@ -415,7 +454,7 @@ namespace jkcnsl
                 try
                 {
                     // ログイン情報が設定されているときcookie引数は使わない
-                    cookie = await GetNicovideoLoginCookieAsync(ct) ?? cookie;
+                    cookie = await GetNicovideoLoginCookieAsync(null, ct) ?? cookie;
 
                     string ret = await HttpClientGetStringAsync("https://live.nicovideo.jp/watch/" + lvId, cookie, ct);
                     Match match = Regex.Match(ret, "<script(?= )([^>]*? id=\"embedded-data\"[^>]*)>");
@@ -1364,12 +1403,12 @@ namespace jkcnsl
         }
 
         /// <summary>.nicovideo.jpにログインする</summary>
-        static async Task NicovideoLoginAsync(CancellationToken ct)
+        static async Task NicovideoLoginAsync(BlockingCollection<string> commands, CancellationToken ct)
         {
             _nicovideoLoginChecked = false;
             try
             {
-                await GetNicovideoLoginCookieAsync(ct);
+                await GetNicovideoLoginCookieAsync(commands, ct);
             }
             catch (Exception e)
             {
@@ -1398,13 +1437,14 @@ namespace jkcnsl
                     return;
                 }
                 Settings.Instance.nicovideo_cookie = null;
+                Settings.Instance.last_login_attempt = 0;
                 Settings.Instance.Save();
             }
             ResponseLines.Add(".");
         }
 
         /// <summary>ログインしていなければ.nicovideo.jpにログインしてセッションクッキーを取得する</summary>
-        static async Task<string> GetNicovideoLoginCookieAsync(CancellationToken ct)
+        static async Task<string> GetNicovideoLoginCookieAsync(BlockingCollection<string> commandsForInteraction, CancellationToken ct)
         {
             // メソッド実装にあたり nicologin (www.axfc.netの/u/4052467) および https://github.com/tsukumijima/NDGRClient を参考にした。
 
@@ -1434,9 +1474,12 @@ namespace jkcnsl
                 client.DefaultRequestHeaders.Add("Sec-Fetch-Mode", "navigate");
                 client.DefaultRequestHeaders.Add("Sec-Fetch-Site", "none");
                 client.DefaultRequestHeaders.Add("Sec-Fetch-User", "?1");
-                if (Settings.Instance.nicovideo_cookie != null)
+                string mfaCookie = Settings.Instance.distrust_device ? null : Settings.Instance.nicovideo_mfa_cookie;
+                if (Settings.Instance.nicovideo_cookie != null || mfaCookie != null)
                 {
-                    client.DefaultRequestHeaders.Add("Cookie", Settings.Instance.nicovideo_cookie);
+                    client.DefaultRequestHeaders.Add("Cookie", (Settings.Instance.nicovideo_cookie ?? "") +
+                                                               (Settings.Instance.nicovideo_cookie != null && mfaCookie != null ? "; " : "") +
+                                                               (mfaCookie ?? ""));
                 }
                 HttpResponseMessage getResponse = await client.GetAsync("https://account.nicovideo.jp/login?site=niconico", ct);
                 if (getResponse.Headers.Contains("x-niconico-id"))
@@ -1444,24 +1487,36 @@ namespace jkcnsl
                     // ログイン済み
                     return Settings.Instance.nicovideo_cookie;
                 }
-                if (Settings.Instance.nicovideo_cookie != null)
-                {
-                    Settings.Instance.nicovideo_cookie = null;
-                    Settings.Instance.Save();
-                }
 
-                client.DefaultRequestHeaders.Clear();
-                client.DefaultRequestHeaders.Add("User-Agent", Settings.Instance.useragent ?? UserAgent);
-                // Add()だと値に無駄なスペースが挿入されるため
-                client.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+                // 2FAの場合に確認コードが大量に送られる事故を防ぐため
+                double now = Math.Floor((DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalSeconds);
+                if (commandsForInteraction == null &&
+                    now >= Settings.Instance.last_login_attempt &&
+                    now < Settings.Instance.last_login_attempt + LoginAttemptIntervalSec)
+                {
+                    // 前回のログイン試行からの間隔が短すぎる
+                    if (Settings.Instance.nicovideo_cookie != null)
+                    {
+                        Settings.Instance.nicovideo_cookie = null;
+                        Settings.Instance.Save();
+                    }
+                    return "";
+                }
+                Settings.Instance.nicovideo_cookie = null;
+                Settings.Instance.nicovideo_mfa_cookie = mfaCookie;
+                Settings.Instance.last_login_attempt = now;
+                Settings.Instance.Save();
+
                 // ログインページからフェッチするようなコンテキスト
-                client.DefaultRequestHeaders.Add("Cache-Control", "no-cache");
                 client.DefaultRequestHeaders.Add("Origin", "https://account.nicovideo.jp");
                 client.DefaultRequestHeaders.Add("Referer", "https://account.nicovideo.jp/login?site=niconico");
-                client.DefaultRequestHeaders.Add("Sec-Fetch-Dest", "document");
-                client.DefaultRequestHeaders.Add("Sec-Fetch-Mode", "navigate");
+                client.DefaultRequestHeaders.Remove("Sec-Fetch-Site");
                 client.DefaultRequestHeaders.Add("Sec-Fetch-Site", "same-origin");
-                client.DefaultRequestHeaders.Add("Sec-Fetch-User", "?1");
+                client.DefaultRequestHeaders.Remove("Cookie");
+                if (mfaCookie != null)
+                {
+                    client.DefaultRequestHeaders.Add("Cookie", mfaCookie);
+                }
 
                 // ログイン
                 var content = new FormUrlEncodedContent(new KeyValuePair<string, string>[]
@@ -1470,6 +1525,53 @@ namespace jkcnsl
                     new KeyValuePair<string, string>("password", Settings.Instance.password)
                 });
                 HttpResponseMessage postResponse = await client.PostAsync("https://account.nicovideo.jp/login/redirector?site=niconico", content, ct);
+
+                if (postResponse.IsSuccessStatusCode && !postResponse.Headers.Contains("x-niconico-id") &&
+                    commandsForInteraction != null &&
+                    postResponse.RequestMessage.RequestUri.AbsoluteUri.StartsWith("https://account.nicovideo.jp/mfa", StringComparison.Ordinal))
+                {
+                    // 2FA画面にリダイレクトされた。ワンタイムパスワードの投稿先をスクレイピング
+                    string body = await postResponse.Content.ReadAsStringAsync(ct);
+                    Match match = Regex.Match(body, "<form(?= )([^>]*? action=\"(/mfa[^>\"]*)\"[^>]*)>");
+                    if (match.Success && Regex.IsMatch(match.Groups[1].Value, " method=\"[Pp][Oo][Ss][Tt]\""))
+                    {
+                        string mfaUri = "https://account.nicovideo.jp" + HttpUtility.HtmlDecode(match.Groups[2].Value);
+
+                        // ワンタイムパスワードを待つ
+                        ResponseLines.Add("-2FA device_name is " + (Settings.Instance.device_name ?? DeviceName));
+                        ResponseLines.Add("-Input '+' and one-time password (like +123456) :");
+                        string otp = null;
+                        while (otp == null)
+                        {
+                            string comm;
+                            while (commandsForInteraction.TryTake(out comm))
+                            {
+                                if (comm.FirstOrDefault() == 'c' || comm.FirstOrDefault() == '+')
+                                {
+                                    otp = comm[0] == '+' ? comm.Substring(1) : "";
+                                    break;
+                                }
+                            }
+                            await Task.Delay(200, ct);
+                        }
+                        if (otp.Length > 0)
+                        {
+                            client.DefaultRequestHeaders.Remove("Referer");
+                            client.DefaultRequestHeaders.Add("Referer", postResponse.RequestMessage.RequestUri.AbsoluteUri);
+
+                            // 2FAでログイン
+                            var enumParam = new KeyValuePair<string, string>[]
+                            {
+                                new KeyValuePair<string, string>("otp", otp),
+                                new KeyValuePair<string, string>("loginBtn", "ログイン"),
+                                new KeyValuePair<string, string>("device_name", Settings.Instance.device_name ?? DeviceName),
+                                new KeyValuePair<string, string>("is_mfa_trusted_device", "true")
+                            }.Take(Settings.Instance.distrust_device ? 3 : 4);
+                            postResponse = await client.PostAsync(mfaUri, new FormUrlEncodedContent(enumParam), ct);
+                        }
+                    }
+                }
+
                 if (postResponse.IsSuccessStatusCode && postResponse.Headers.Contains("x-niconico-id"))
                 {
                     // ログイン成功
@@ -1483,6 +1585,18 @@ namespace jkcnsl
                     }
                     if (cookie.Length > 0)
                     {
+                        if (!Settings.Instance.distrust_device)
+                        {
+                            foreach (Cookie item in clientHandler.CookieContainer.GetCookies(new Uri("https://account.nicovideo.jp/")))
+                            {
+                                // 信頼済みデバイスとして2FAを省略する場合は次回ログイン時にこの情報が必要
+                                if (item.Name == "mfa_trusted_device_token")
+                                {
+                                    Settings.Instance.nicovideo_mfa_cookie = item.ToString();
+                                    break;
+                                }
+                            }
+                        }
                         Settings.Instance.nicovideo_cookie = cookie.Substring(2);
                         Settings.Instance.Save();
                     }
