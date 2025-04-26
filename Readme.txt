@@ -8,6 +8,12 @@
 > dotnet publish -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true /p:PublishTrimmed=true
 などとしてください。
 動作環境はWindowsではWindows10以降と思います。
+Linuxでは以下のようにビルドできます(Ubuntu 24.04の例)。設定ファイルなどの既定の保存先は"/var/local/jkcnsl"です。
+> sudo apt install dotnet-sdk-8.0
+> dotnet publish -c Release -r linux-x64 --self-contained true /p:PublishSingleFile=true /p:PublishTrimmed=true
+> sudo install ./bin/Release/net8.0/linux-x64/publish/jkcnsl /usr/local/bin
+> sudo mkdir /var/local/jkcnsl
+> sudo chown $USER /var/local/jkcnsl  # パーミッション等は適宜調整
 
 jkcnslを起動して、
 > Lch???<改行> (←???は実況の番号)

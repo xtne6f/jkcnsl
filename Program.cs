@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.IO.Pipes;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -19,6 +20,7 @@ namespace jkcnsl
 {
     class Program
     {
+        const string UnixDefaultBaseDirectory = "/var/local/jkcnsl";
         const string UserAgent = "Mozilla/5.0";
         static readonly string DeviceName = "Console (" +
             (OperatingSystem.IsWindows() ? "Windows" :
@@ -72,6 +74,13 @@ namespace jkcnsl
 
         static bool _nicovideoLoginChecked = false;
 
+        static bool _postAsAnonymous = false;
+        static bool _postDropDuplicate = false;
+        static int _postIntervalMsec = 0;
+        static int _postMaxlen = 0;
+        static string _lastPostComment = "";
+        static int _lastPostTick = 0;
+
         class StreamMixingInfo
         {
             public bool dropForwardedChat;
@@ -84,35 +93,119 @@ namespace jkcnsl
 
         static void Main(string[] args)
         {
-            Process parentProcess;
-            if (args.Length == 2 && args[0] == "-p")
+            Process parentProcess = null;
+            var cleanup = () => { };
+            var commands = new BlockingCollection<string>();
+            string pipeName = null;
+            bool intermittent = false;
+            for (int i = 0; i < args.Length; i++)
             {
-                // 親プロセスの不正終了を監視する
+                if (args[i] == "-p" && i + 1 < args.Length && parentProcess == null)
+                {
+                    // 親プロセスの不正終了を監視する
+                    try
+                    {
+                        parentProcess = Process.GetProcessById(int.Parse(args[++i]));
+                        parentProcess.EnableRaisingEvents = true;
+                        parentProcess.Exited += (sender, e) =>
+                        {
+                            // 非常時なので雑に落とす
+                            Trace.WriteLine("Parent process exited!");
+                            cleanup();
+                            Environment.Exit(1);
+                        };
+                    }
+                    catch (Exception e)
+                    {
+                        Console.Error.WriteLine("Error: " + e.Message);
+                        Environment.Exit(1);
+                    }
+                }
+                else if (args[i] == "-d" && i + 1 < args.Length)
+                {
+                    // 設定ファイルなどを置くディレクトリを指定する
+                    Settings.BaseDirectory = args[++i];
+                }
+                else if (args[i] == "-c" && i + 1 < args.Length && commands.Count == 0)
+                {
+                    // 単発コマンドモード
+                    commands.Add(args[++i]);
+                }
+                else if (args[i] == "-n" && i + 1 < args.Length)
+                {
+                    // 入力を名前付きパイプなどで待ち受ける
+                    pipeName = args[++i];
+                }
+                else if (args[i] == "-i")
+                {
+                    // 実況ストリームを断続的に出力する
+                    intermittent = true;
+                }
+                else if (args[i] == "--post-as-anon")
+                {
+                    // 匿名で投稿する
+                    _postAsAnonymous = true;
+                }
+                else if (args[i] == "--post-drop-dup")
+                {
+                    // 前回と同じ投稿を拒否する
+                    _postDropDuplicate = true;
+                }
+                else if (args[i] == "--post-interval" && i + 1 < args.Length)
+                {
+                    // 投稿間隔を制限する
+                    int.TryParse(args[++i], out _postIntervalMsec);
+                }
+                else if (args[i] == "--post-maxlen" && i + 1 < args.Length)
+                {
+                    // 投稿コメントの長さを制限する
+                    int.TryParse(args[++i], out _postMaxlen);
+                }
+                else
+                {
+                    Console.Error.WriteLine("Usage: jkcnsl [-p pid][-d base_dir][-c cmd][-n pipe_name][-i][--post-as-anon][--post-drop-dup][--post-interval msec][--post-maxlen len]");
+                    Environment.Exit(2);
+                }
+            }
+
+            if (!OperatingSystem.IsWindows() && Settings.BaseDirectory == null)
+            {
+                Settings.BaseDirectory = UnixDefaultBaseDirectory;
+            }
+            if (Settings.BaseDirectory != null && !Directory.Exists(Settings.BaseDirectory))
+            {
+                Console.Error.WriteLine("Warning: Base directory '" + Settings.BaseDirectory + "' does not exist.");
+            }
+
+            NamedPipeServerStream pipeServer = null;
+            if (pipeName != null)
+            {
                 try
                 {
-                    parentProcess = Process.GetProcessById(int.Parse(args[1]));
-                    parentProcess.EnableRaisingEvents = true;
-                    parentProcess.Exited += (sender, e) =>
+                    if (OperatingSystem.IsWindows())
                     {
-                        // 非常時なので雑に落とす
-                        Trace.WriteLine("Parent process exited!");
-                        Environment.Exit(1);
-                    };
+                        pipeServer = new NamedPipeServerStream(pipeName, PipeDirection.In, 1);
+                    }
+                    else
+                    {
+                        // NamedPipeServerStreamは実装がUNIXドメインソケットでFIFOファイルは未サポートなので普通のファイルを利用する
+                        // ファイルは既存であってはならない
+                        pipeName = Path.Join(Settings.BaseDirectory, pipeName);
+                        using (File.Open(pipeName, FileMode.CreateNew)) { }
+                        cleanup = () => File.Delete(pipeName);
+                    }
                 }
                 catch (Exception e)
                 {
-                    Trace.WriteLine(e.ToString());
+                    Console.Error.WriteLine("Error: " + e.Message);
+                    Environment.Exit(1);
                 }
             }
-            else if (args.Length != 0)
-            {
-                Trace.WriteLine("Invalid argument!");
-                return;
-            }
 
+            Console.CancelKeyPress += (sender, e) => cleanup();
             Console.InputEncoding = Encoding.UTF8;
             Console.OutputEncoding = Encoding.UTF8;
-            var commands = new BlockingCollection<string>();
+            bool singleCommand = commands.Count > 0;
             var quitCts = new CancellationTokenSource();
 
             Task processTask = Task.Run(async () =>
@@ -156,6 +249,8 @@ namespace jkcnsl
                             case 'L':
                                 {
                                     string[] arg = comm.Substring(1).Split(new char[] { ' ' }, 2);
+                                    // ここから結果の出力まで実況ストリーム
+                                    ResponseLines.Add("*");
                                     ResponseLines.Add(await GetNicovideoStreamAsync(arg[0], arg.Length >= 2 ? arg[1] : "", commands, new StreamMixingInfo(), quitCts.Token));
                                 }
                                 break;
@@ -168,6 +263,8 @@ namespace jkcnsl
                                         ResponseLines.Add("!");
                                         break;
                                     }
+                                    // ここから結果の出力まで実況ストリーム
+                                    ResponseLines.Add("*");
                                     if (arg[0] == "2" && arg.Length >= 3)
                                     {
                                         // 混合
@@ -315,26 +412,175 @@ namespace jkcnsl
             {
                 try
                 {
+                    bool streaming = false;
+                    var pendingLines = new List<string>();
+                    int waitTick = Environment.TickCount & int.MaxValue;
                     foreach (string response in ResponseLines.GetConsumingEnumerable(quitCts.Token))
                     {
                         quitCts.Token.ThrowIfCancellationRequested();
-                        Console.WriteLine(response);
+                        bool done = false;
+                        if (response[0] == '*')
+                        {
+                            streaming = true;
+                        }
+                        else if (response[0] == '-')
+                        {
+                            pendingLines.Add(response);
+                        }
+                        else
+                        {
+                            done = true;
+                        }
+                        if (intermittent && streaming)
+                        {
+                            for (; ; )
+                            {
+                                int tick = Environment.TickCount & int.MaxValue;
+                                if ((done && pendingLines.Count > 0) || ((tick - waitTick) & int.MaxValue) >= (pendingLines.Count > 0 ? 200 : 1000))
+                                {
+                                    // 80文字のヘッダをつける
+                                    string head = "<!-- L=" + pendingLines.Sum(a => Encoding.UTF8.GetByteCount(a)) + ";N=" + pendingLines.Count;
+                                    head += new string(' ', 76 - head.Length) + "-->";
+                                    // 単発コマンド時は接頭辞をつけない
+                                    Console.WriteLine((singleCommand ? "" : "-") + head);
+                                    pendingLines.ForEach(a => Console.WriteLine(singleCommand ? a.Substring(1) : a));
+                                    pendingLines.Clear();
+                                    waitTick = tick;
+                                }
+                                // ブロックしないように
+                                if (done || ResponseLines.Count > 0)
+                                {
+                                    break;
+                                }
+                                Thread.Sleep(200);
+                                quitCts.Token.ThrowIfCancellationRequested();
+                            }
+                        }
+                        else
+                        {
+                            // 単発コマンド時は接頭辞をつけない
+                            pendingLines.ForEach(a => Console.WriteLine(singleCommand ? a.Substring(1) : a));
+                            pendingLines.Clear();
+                        }
+                        if (done)
+                        {
+                            if (singleCommand)
+                            {
+                                // 終了
+                                cleanup();
+                                Environment.Exit(response[0] == '?' ? 2 : response[0] == '.' ? 0 : 1);
+                            }
+                            Console.WriteLine(response);
+                            streaming = false;
+                        }
                     }
                 }
                 catch { }
             });
 
-            // 標準入力はブロックさせずに読み続ける
-            for (; ; )
+            if (pipeName != null)
             {
-                string comm = Console.ReadLine();
-                if (comm == null || comm.FirstOrDefault() == 'q')
+                bool ReadLine(Stream s, ref bool quit)
                 {
-                    Trace.WriteLine("Quit");
-                    // 終了
-                    break;
+                    var buf = new byte[64];
+                    int bufCount = 0;
+                    for (int b; (b = s.ReadByte()) >= 0; )
+                    {
+                        if (bufCount >= buf.Length)
+                        {
+                            var newBuf = new byte[buf.Length * 2];
+                            buf.CopyTo(newBuf, 0);
+                            buf = newBuf;
+                        }
+                        if (b == 0x0A)
+                        {
+                            string comm = "";
+                            try
+                            {
+                                comm = Encoding.UTF8.GetString(buf, 0, bufCount - (bufCount > 0 && buf[bufCount - 1] == 0x0D ? 1 : 0));
+                            }
+                            catch { }
+                            if (comm[0] == 'q')
+                            {
+                                quit = true;
+                                Trace.WriteLine("Quit");
+                                // 終了
+                                return true;
+                            }
+                            commands.Add(comm);
+                            return true;
+                        }
+                        buf[bufCount++] = (byte)b;
+                    }
+                    return false;
                 }
-                commands.Add(comm);
+
+                if (OperatingSystem.IsWindows())
+                {
+                    // 入力を名前付きパイプで待ち受ける
+                    using (pipeServer)
+                    {
+                        for (bool quit = false; !quit; )
+                        {
+                            // 接続ごとにコマンドを1行だけ読んで切断する
+                            pipeServer.WaitForConnection();
+                            ReadLine(pipeServer, ref quit);
+                            pipeServer.Disconnect();
+                        }
+                    }
+                }
+                else
+                {
+                    // 書き込まれたコマンドをファイルから定期的に読んでクリアする
+                    for (; ; )
+                    {
+                        Thread.Sleep(500);
+                        FileStream fs = null;
+                        try
+                        {
+                            // flock(LOCK_EX)相当で排他ロックされる
+                            fs = File.Open(pipeName, FileMode.Open);
+                        }
+                        catch { }
+                        if (fs != null)
+                        {
+                            using (fs)
+                            {
+                                bool quit = false;
+                                bool read = false;
+                                while (ReadLine(fs, ref quit) && !quit)
+                                {
+                                    read = true;
+                                }
+                                if (quit)
+                                {
+                                    File.Delete(pipeName);
+                                    break;
+                                }
+                                if (read)
+                                {
+                                    fs.SetLength(0);
+                                    fs.Flush();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            else
+            {
+                // 標準入力はブロックさせずに読み続ける
+                for (; ; )
+                {
+                    string comm = Console.ReadLine();
+                    if (comm == null || comm.FirstOrDefault() == 'q')
+                    {
+                        Trace.WriteLine("Quit");
+                        // 終了
+                        break;
+                    }
+                    commands.Add(comm);
+                }
             }
             quitCts.Cancel();
 
@@ -618,7 +864,27 @@ namespace jkcnsl
                                         (dest_ == "nico" || !mixingInfo.ignoreUnspecifiedDestinationPost))
                                     {
                                         // コメント投稿
-                                        if ((dest_ == "nico" || dest_ == null) && vposBaseUnixTime > TimeSpan.Zero && serverUnixTime >= vposBaseUnixTime)
+                                        if ((dest_ != "nico" && dest_ != null) || vposBaseUnixTime <= TimeSpan.Zero || serverUnixTime < vposBaseUnixTime)
+                                        {
+                                            // 投稿拒否
+                                            ResponseLines.Add("-<chat_result status=\"1\" />");
+                                        }
+                                        else if ((((Environment.TickCount & int.MaxValue) - _lastPostTick) & int.MaxValue) < _postIntervalMsec)
+                                        {
+                                            // コメントはブロックされている(投稿間隔が短すぎる)
+                                            ResponseLines.Add("-<chat_result status=\"5\" />");
+                                        }
+                                        else if (_postMaxlen > 0 && text_.Length > _postMaxlen)
+                                        {
+                                            // コメント内容が長すぎる
+                                            ResponseLines.Add("-<chat_result status=\"8\" />");
+                                        }
+                                        else if (_postDropDuplicate && text_ == _lastPostComment)
+                                        {
+                                            // コメントはブロックされている(投稿コメントが前回と同じ)
+                                            ResponseLines.Add("-<chat_result status=\"5\" />");
+                                        }
+                                        else
                                         {
                                             // vposは10msec単位。内部時計のずれに影響されないようにサーバ時刻を基準に補正
                                             int vpos = (int)(serverUnixTime - vposBaseUnixTime).TotalSeconds * 100 + (((Environment.TickCount & int.MaxValue) - serverUnixTimeTick) & int.MaxValue) / 10;
@@ -629,7 +895,7 @@ namespace jkcnsl
                                                 {
                                                     color = color_,
                                                     font = font_,
-                                                    isAnonymous = isAnonymous_,
+                                                    isAnonymous = isAnonymous_ || _postAsAnonymous,
                                                     position = position_,
                                                     size = size_,
                                                     text = text_,
@@ -639,12 +905,9 @@ namespace jkcnsl
                                             });
                                             byte[] post = ms.ToArray();
                                             Trace.WriteLine(Encoding.UTF8.GetString(post));
+                                            _lastPostComment = text_;
+                                            _lastPostTick = Environment.TickCount & int.MaxValue;
                                             await DoWebSocketAction(async ct => await watchSession.SendAsync(new ArraySegment<byte>(post), WebSocketMessageType.Text, true, ct), ct);
-                                        }
-                                        else
-                                        {
-                                            // 投稿拒否
-                                            ResponseLines.Add("-<chat_result status=\"1\" />");
                                         }
                                     }
                                 }
@@ -1117,7 +1380,27 @@ namespace jkcnsl
                                         (dest_ == "refuge" || !mixingInfo.ignoreUnspecifiedDestinationPost))
                                     {
                                         // コメント投稿
-                                        if ((dest_ == "refuge" || dest_ == null) && vposBaseUnixTime > TimeSpan.Zero && serverUnixTime >= vposBaseUnixTime)
+                                        if ((dest_ != "refuge" && dest_ != null) || vposBaseUnixTime <= TimeSpan.Zero || serverUnixTime < vposBaseUnixTime)
+                                        {
+                                            // 投稿拒否
+                                            ResponseLines.Add("-<chat_result status=\"1\" x_refuge=\"1\" />");
+                                        }
+                                        else if ((((Environment.TickCount & int.MaxValue) - _lastPostTick) & int.MaxValue) < _postIntervalMsec)
+                                        {
+                                            // コメントはブロックされている(投稿間隔が短すぎる)
+                                            ResponseLines.Add("-<chat_result status=\"5\" x_refuge=\"1\" />");
+                                        }
+                                        else if (_postMaxlen > 0 && text_.Length > _postMaxlen)
+                                        {
+                                            // コメント内容が長すぎる
+                                            ResponseLines.Add("-<chat_result status=\"8\" x_refuge=\"1\" />");
+                                        }
+                                        else if (_postDropDuplicate && text_ == _lastPostComment)
+                                        {
+                                            // コメントはブロックされている(投稿コメントが前回と同じ)
+                                            ResponseLines.Add("-<chat_result status=\"5\" x_refuge=\"1\" />");
+                                        }
+                                        else
                                         {
                                             // vposは10msec単位。内部時計のずれに影響されないようにサーバ時刻を基準に補正
                                             int vpos = (int)(serverUnixTime - vposBaseUnixTime).TotalSeconds * 100 + (((Environment.TickCount & int.MaxValue) - serverUnixTimeTick) & int.MaxValue) / 10;
@@ -1128,7 +1411,7 @@ namespace jkcnsl
                                                 {
                                                     color = color_,
                                                     font = font_,
-                                                    isAnonymous = isAnonymous_,
+                                                    isAnonymous = isAnonymous_ || _postAsAnonymous,
                                                     position = position_,
                                                     size = size_,
                                                     text = text_,
@@ -1138,12 +1421,9 @@ namespace jkcnsl
                                             });
                                             byte[] post = ms.ToArray();
                                             Trace.WriteLine(Encoding.UTF8.GetString(post));
+                                            _lastPostComment = text_;
+                                            _lastPostTick = Environment.TickCount & int.MaxValue;
                                             await DoWebSocketAction(async ct => await watchSession.SendAsync(new ArraySegment<byte>(post), WebSocketMessageType.Text, true, ct), ct);
-                                        }
-                                        else
-                                        {
-                                            // 投稿拒否
-                                            ResponseLines.Add("-<chat_result status=\"1\" x_refuge=\"1\" />");
                                         }
                                     }
                                 }

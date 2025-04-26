@@ -42,6 +42,8 @@ namespace jkcnsl
             }
         }
 
+        public static string BaseDirectory { get; set; }
+
         public void Load()
         {
             Settings settings = null;
@@ -49,7 +51,7 @@ namespace jkcnsl
             {
                 try
                 {
-                    using (var fs = new FileStream(Path.Join(AppContext.BaseDirectory, "jkcnsl.json"), FileMode.Open, FileAccess.Read))
+                    using (var fs = new FileStream(Path.Join(BaseDirectory ?? AppContext.BaseDirectory, "jkcnsl.json"), FileMode.Open, FileAccess.Read))
                     {
                         settings = new DataContractJsonSerializerWrapper<Settings>().ReadValue(fs);
                     }
@@ -111,7 +113,7 @@ namespace jkcnsl
             {
                 try
                 {
-                    using (var fs = new FileStream(Path.Join(AppContext.BaseDirectory, "jkcnsl.json"), FileMode.Create, FileAccess.Write, FileShare.None))
+                    using (var fs = new FileStream(Path.Join(BaseDirectory ?? AppContext.BaseDirectory, "jkcnsl.json"), FileMode.Create, FileAccess.Write, FileShare.None))
                     {
                         new DataContractJsonSerializerWrapper<Settings>().WriteValue(fs, settings);
                     }
