@@ -26,6 +26,10 @@ namespace jkcnsl
         [DataMember]
         public bool distrust_device { get; set; }
         [DataMember]
+        public double http_get_timeout_sec { get; set; }
+        [DataMember]
+        public double web_socket_timeout_sec { get; set; }
+        [DataMember]
         public double last_login_attempt { get; set; }
 
         static Settings _instance;
@@ -81,6 +85,8 @@ namespace jkcnsl
             useragent = null;
             device_name = null;
             distrust_device = false;
+            http_get_timeout_sec = 0;
+            web_socket_timeout_sec = 0;
             last_login_attempt = 0;
             if (settings != null)
             {
@@ -91,6 +97,8 @@ namespace jkcnsl
                 useragent = settings.useragent;
                 device_name = settings.device_name;
                 distrust_device = settings.distrust_device;
+                http_get_timeout_sec = settings.http_get_timeout_sec;
+                web_socket_timeout_sec = settings.web_socket_timeout_sec;
                 last_login_attempt = settings.last_login_attempt;
             }
         }
@@ -106,6 +114,8 @@ namespace jkcnsl
                 useragent = useragent,
                 device_name = device_name,
                 distrust_device = distrust_device,
+                http_get_timeout_sec = http_get_timeout_sec,
+                web_socket_timeout_sec = web_socket_timeout_sec,
                 last_login_attempt = last_login_attempt
             };
 

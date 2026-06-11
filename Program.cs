@@ -46,7 +46,8 @@ namespace jkcnsl
                     {
                         AutomaticDecompression = DecompressionMethods.All,
                         UseCookies = false
-                    }) { Timeout = TimeSpan.FromSeconds(HttpGetTimeoutSec) };
+                    }) { Timeout = TimeSpan.FromSeconds(Settings.Instance.http_get_timeout_sec == 0 ? HttpGetTimeoutSec :
+                             Math.Min(Math.Max(Settings.Instance.http_get_timeout_sec, HttpGetTimeoutSec * 0.1), HttpGetTimeoutSec * 10.0)) };
                 }
                 return _httpClientInstance;
             }
@@ -316,6 +317,14 @@ namespace jkcnsl
                                         {
                                             Settings.Instance.device_name = null;
                                         }
+                                        else if (arg[0] == "http_get_timeout_sec")
+                                        {
+                                            Settings.Instance.http_get_timeout_sec = 0;
+                                        }
+                                        else if (arg[0] == "web_socket_timeout_sec")
+                                        {
+                                            Settings.Instance.web_socket_timeout_sec = 0;
+                                        }
                                         else if (arg[0].Length == 0)
                                         {
                                             // すべての設定を出力
@@ -344,6 +353,8 @@ namespace jkcnsl
                                             ResponseLines.Add("-useragent " + (Settings.Instance.useragent ?? UserAgent));
                                             ResponseLines.Add("-device_name " + (Settings.Instance.device_name ?? DeviceName));
                                             ResponseLines.Add("-trust_device " + (Settings.Instance.distrust_device ? "false" : "true"));
+                                            ResponseLines.Add("-http_get_timeout_sec " + (Settings.Instance.http_get_timeout_sec == 0 ? HttpGetTimeoutSec : Settings.Instance.http_get_timeout_sec));
+                                            ResponseLines.Add("-web_socket_timeout_sec " + (Settings.Instance.web_socket_timeout_sec == 0 ? WebSocketTimeoutSec : Settings.Instance.web_socket_timeout_sec));
                                             ResponseLines.Add("-last_login_attempt " + Settings.Instance.last_login_attempt);
                                             ResponseLines.Add(".");
                                             break;
@@ -357,6 +368,7 @@ namespace jkcnsl
                                     else
                                     {
                                         // 設定を変更
+                                        double d;
                                         if (arg[0] == "mail")
                                         {
                                             _nicovideoLoginChecked = false;
@@ -384,6 +396,14 @@ namespace jkcnsl
                                         else if (arg[0] == "trust_device")
                                         {
                                             Settings.Instance.distrust_device = arg[1] != "true";
+                                        }
+                                        else if (arg[0] == "http_get_timeout_sec" && double.TryParse(arg[1], out d))
+                                        {
+                                            Settings.Instance.http_get_timeout_sec = Math.Min(Math.Max(d, HttpGetTimeoutSec * 0.1), HttpGetTimeoutSec * 10.0);
+                                        }
+                                        else if (arg[0] == "web_socket_timeout_sec" && double.TryParse(arg[1], out d))
+                                        {
+                                            Settings.Instance.web_socket_timeout_sec = Math.Min(Math.Max(d, WebSocketTimeoutSec * 0.1), WebSocketTimeoutSec * 10.0);
                                         }
                                         else
                                         {
@@ -1743,7 +1763,8 @@ namespace jkcnsl
             // クッキーを取得するため
             var clientHandler = new HttpClientHandler { AutomaticDecompression = DecompressionMethods.All };
 
-            using (var client = new HttpClient(clientHandler) { Timeout = TimeSpan.FromSeconds(HttpGetTimeoutSec) })
+            using (var client = new HttpClient(clientHandler) { Timeout = TimeSpan.FromSeconds(Settings.Instance.http_get_timeout_sec == 0 ? HttpGetTimeoutSec :
+                       Math.Min(Math.Max(Settings.Instance.http_get_timeout_sec, HttpGetTimeoutSec * 0.1), HttpGetTimeoutSec * 10.0)) })
             {
                 client.DefaultRequestHeaders.Add("User-Agent", Settings.Instance.useragent ?? UserAgent);
                 // Add()だと値に無駄なスペースが挿入されるため
@@ -1952,7 +1973,8 @@ namespace jkcnsl
         {
             using (var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct))
             {
-                linkedCts.CancelAfter(WebSocketTimeoutSec * 1000);
+                linkedCts.CancelAfter(TimeSpan.FromSeconds(Settings.Instance.web_socket_timeout_sec == 0 ? WebSocketTimeoutSec :
+                    Math.Min(Math.Max(Settings.Instance.web_socket_timeout_sec, WebSocketTimeoutSec * 0.1), WebSocketTimeoutSec * 10.0)));
                 // タイムアウト時はここでOperationCanceledExceptionなどが飛ぶ
                 // TimeoutExceptionあたりに変換したほうが分かりやすいが今のところ不都合はないのでそのまま
                 await actionAsync(linkedCts.Token);
