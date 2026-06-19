@@ -3,6 +3,11 @@
 ■概要
 おもにニコニコ実況のコメントを取得する非公式のコマンドラインツールです。
 
+■注意
+これは非公式のツールです。
+ニコニコ実況(= https://live.nicovideo.jp/ の特定チャンネル)の仕様変更その他による不具合や不利益を被る可能性があります。
+ソースファイルのみ公開しますので、各自の責任で検査しビルドしてください。
+
 ■使い方など
 .NETアプリなのでビルドは各種のシェルでプロジェクトフォルダに移動し、
 > dotnet publish -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true /p:PublishTrimmed=true
@@ -73,4 +78,4 @@ https://github.com/asannou/namami を参考にしました。とりわけ変数�
 https://github.com/tsukumijima/NDGRClient および
 https://github.com/noriokun4649/TVTComment を参考にしました。
 
-ログイン機能の実装にあたりnicologin (www.axfc.netの/u/4052467)を参考にしました。
+ログイン機能の実装にあたりnicologin( www.axfc.netの/u/4052467 )を参考にしました。

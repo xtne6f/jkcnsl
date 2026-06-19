@@ -1727,7 +1727,45 @@ namespace jkcnsl
             {
                 try
                 {
-                    await HttpClientGetStringAsync("https://account.nicovideo.jp/logout?site=niconico", Settings.Instance.nicovideo_cookie, ct);
+                    var clientHandler = new HttpClientHandler { AutomaticDecompression = DecompressionMethods.All };
+
+                    using (var client = new HttpClient(clientHandler) { Timeout = TimeSpan.FromSeconds(Settings.Instance.http_get_timeout_sec == 0 ? HttpGetTimeoutSec :
+                               Math.Min(Math.Max(Settings.Instance.http_get_timeout_sec, HttpGetTimeoutSec * 0.1), HttpGetTimeoutSec * 10.0)) })
+                    {
+                        client.DefaultRequestHeaders.Add("User-Agent", Settings.Instance.useragent ?? UserAgent);
+                        // Add()だと値に無駄なスペースが挿入されるため
+                        client.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+                        // ユーザーがブラウザで直接アクセスするようなコンテキスト
+                        client.DefaultRequestHeaders.Add("Cache-Control", "no-cache");
+                        client.DefaultRequestHeaders.Add("Sec-Fetch-Dest", "document");
+                        client.DefaultRequestHeaders.Add("Sec-Fetch-Mode", "navigate");
+                        client.DefaultRequestHeaders.Add("Sec-Fetch-Site", "none");
+                        client.DefaultRequestHeaders.Add("Sec-Fetch-User", "?1");
+                        client.DefaultRequestHeaders.Add("Cookie", Settings.Instance.nicovideo_cookie);
+                        HttpResponseMessage getResponse = await client.GetAsync("https://account.nicovideo.jp/logout?site=niconico", ct);
+                        if (!getResponse.IsSuccessStatusCode)
+                        {
+                            throw new Exception("Nicovideo logout page returned a failure status.");
+                        }
+                        // ログアウトの確認ページからクロスオリジンでDELETEメソッドをフェッチするようなコンテキスト
+                        client.DefaultRequestHeaders.Add("Origin", "https://account.nicovideo.jp");
+                        client.DefaultRequestHeaders.Add("Referer", "https://account.nicovideo.jp/");
+                        client.DefaultRequestHeaders.Remove("Sec-Fetch-Dest");
+                        client.DefaultRequestHeaders.Add("Sec-Fetch-Dest", "empty");
+                        client.DefaultRequestHeaders.Remove("Sec-Fetch-Mode");
+                        client.DefaultRequestHeaders.Add("Sec-Fetch-Mode", "cors");
+                        client.DefaultRequestHeaders.Remove("Sec-Fetch-Site");
+                        client.DefaultRequestHeaders.Add("Sec-Fetch-Site", "same-site");
+                        client.DefaultRequestHeaders.Remove("Sec-Fetch-User");
+                        client.DefaultRequestHeaders.Add("X-Frontend-Id", "8");
+                        client.DefaultRequestHeaders.Add("X-Frontend-Version", "2");
+                        HttpResponseMessage deleteResponse = await client.DeleteAsync("https://api.id.nicovideo.jp/v1/sessions/me", ct);
+                        if (!deleteResponse.IsSuccessStatusCode)
+                        {
+                            throw new Exception("Nicovideo logout API returned a failure status.");
+                        }
+                        // ログアウト成功
+                    }
                 }
                 catch (Exception e)
                 {
@@ -1782,7 +1820,7 @@ namespace jkcnsl
                                                                (Settings.Instance.nicovideo_cookie != null && mfaCookie != null ? "; " : "") +
                                                                (mfaCookie ?? ""));
                 }
-                HttpResponseMessage getResponse = await client.GetAsync("https://account.nicovideo.jp/login?site=niconico", ct);
+                HttpResponseMessage getResponse = await client.GetAsync("https://account.nicovideo.jp/my/account", ct);
                 if (getResponse.Headers.Contains("x-niconico-id"))
                 {
                     // ログイン済み
@@ -1810,7 +1848,7 @@ namespace jkcnsl
 
                 // ログインページからフェッチするようなコンテキスト
                 client.DefaultRequestHeaders.Add("Origin", "https://account.nicovideo.jp");
-                client.DefaultRequestHeaders.Add("Referer", "https://account.nicovideo.jp/login?site=niconico");
+                client.DefaultRequestHeaders.Add("Referer", "https://account.nicovideo.jp/");
                 client.DefaultRequestHeaders.Remove("Sec-Fetch-Site");
                 client.DefaultRequestHeaders.Add("Sec-Fetch-Site", "same-origin");
                 client.DefaultRequestHeaders.Remove("Cookie");
