@@ -43,6 +43,15 @@ namespace dwango.nicolive.chat.data
         [global::ProtoBuf.ProtoMember(10)]
         public global::dwango.nicolive.chat.data.atoms.ModerationAnnouncement moderation_announcement { get; set; }
 
+        [global::ProtoBuf.ProtoMember(11)]
+        public global::dwango.nicolive.chat.data.atoms.IchibaLauncherItemSet ichiba_launcher { get; set; }
+
+        [global::ProtoBuf.ProtoMember(12)]
+        public global::dwango.nicolive.chat.data.atoms.StreamStateChange stream_state_change { get; set; }
+
+        [global::ProtoBuf.ProtoMember(13)]
+        public global::dwango.nicolive.chat.data.atoms.AkashicStateRouting akashic_state { get; set; }
+
     }
 
 }

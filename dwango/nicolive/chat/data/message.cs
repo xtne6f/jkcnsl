@@ -99,6 +99,51 @@ namespace dwango.nicolive.chat.data
         public bool ShouldSerializeoverflowed_chat() => __pbn__data.Is(20);
         public void Resetoverflowed_chat() => global::ProtoBuf.DiscriminatedUnionObject.Reset(ref __pbn__data, 20);
 
+        [global::ProtoBuf.ProtoMember(22)]
+        public global::dwango.nicolive.chat.data.atoms.ForwardedChat forwarded_chat
+        {
+            get => __pbn__data.Is(22) ? ((global::dwango.nicolive.chat.data.atoms.ForwardedChat)__pbn__data.Object) : default;
+            set => __pbn__data = new global::ProtoBuf.DiscriminatedUnionObject(22, value);
+        }
+        public bool ShouldSerializeforwarded_chat() => __pbn__data.Is(22);
+        public void Resetforwarded_chat() => global::ProtoBuf.DiscriminatedUnionObject.Reset(ref __pbn__data, 22);
+
+        [global::ProtoBuf.ProtoMember(23)]
+        public global::dwango.nicolive.chat.data.atoms.SimpleNotificationV2 simple_notification_v2
+        {
+            get => __pbn__data.Is(23) ? ((global::dwango.nicolive.chat.data.atoms.SimpleNotificationV2)__pbn__data.Object) : default;
+            set => __pbn__data = new global::ProtoBuf.DiscriminatedUnionObject(23, value);
+        }
+        public bool ShouldSerializesimple_notification_v2() => __pbn__data.Is(23);
+        public void Resetsimple_notification_v2() => global::ProtoBuf.DiscriminatedUnionObject.Reset(ref __pbn__data, 23);
+
+        [global::ProtoBuf.ProtoMember(24)]
+        public global::dwango.nicolive.chat.data.atoms.AkashicMessageEvent akashic_message_event
+        {
+            get => __pbn__data.Is(24) ? ((global::dwango.nicolive.chat.data.atoms.AkashicMessageEvent)__pbn__data.Object) : default;
+            set => __pbn__data = new global::ProtoBuf.DiscriminatedUnionObject(24, value);
+        }
+        public bool ShouldSerializeakashic_message_event() => __pbn__data.Is(24);
+        public void Resetakashic_message_event() => global::ProtoBuf.DiscriminatedUnionObject.Reset(ref __pbn__data, 24);
+
+        [global::ProtoBuf.ProtoMember(25)]
+        public global::dwango.nicolive.chat.data.atoms.FeaturesUpdated features_updated
+        {
+            get => __pbn__data.Is(25) ? ((global::dwango.nicolive.chat.data.atoms.FeaturesUpdated)__pbn__data.Object) : default;
+            set => __pbn__data = new global::ProtoBuf.DiscriminatedUnionObject(25, value);
+        }
+        public bool ShouldSerializefeatures_updated() => __pbn__data.Is(25);
+        public void Resetfeatures_updated() => global::ProtoBuf.DiscriminatedUnionObject.Reset(ref __pbn__data, 25);
+
+        [global::ProtoBuf.ProtoMember(26)]
+        public global::dwango.nicolive.chat.data.atoms.CruiseRecentContents cruise_recent_contents
+        {
+            get => __pbn__data.Is(26) ? ((global::dwango.nicolive.chat.data.atoms.CruiseRecentContents)__pbn__data.Object) : default;
+            set => __pbn__data = new global::ProtoBuf.DiscriminatedUnionObject(26, value);
+        }
+        public bool ShouldSerializecruise_recent_contents() => __pbn__data.Is(26);
+        public void Resetcruise_recent_contents() => global::ProtoBuf.DiscriminatedUnionObject.Reset(ref __pbn__data, 26);
+
     }
 
 }

@@ -110,6 +110,9 @@ namespace dwango.nicolive.chat.data.atoms
         [global::ProtoBuf.CompatibilityLevel(global::ProtoBuf.CompatibilityLevel.Level300)]
         public global::System.DateTime? updatedAt { get; set; }
 
+        [global::ProtoBuf.ProtoMember(7)]
+        public SSNGOperatorType operator_type { get; set; }
+
         [global::ProtoBuf.ProtoContract()]
         public enum SSNGOperation
         {
@@ -123,6 +126,13 @@ namespace dwango.nicolive.chat.data.atoms
             USER = 0,
             WORD = 1,
             COMMAND = 2,
+        }
+
+        [global::ProtoBuf.ProtoContract()]
+        public enum SSNGOperatorType
+        {
+            MODERATOR = 0,
+            BROADCASTER = 1,
         }
 
     }

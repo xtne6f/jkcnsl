@@ -357,6 +357,26 @@ namespace dwango.nicolive.chat.data
         public bool ShouldSerializevisited() => __pbn__message.Is(7);
         public void Resetvisited() => global::ProtoBuf.DiscriminatedUnionObject.Reset(ref __pbn__message, 7);
 
+        [global::ProtoBuf.ProtoMember(9)]
+        [global::System.ComponentModel.DefaultValue("")]
+        public string supporter_registered
+        {
+            get => __pbn__message.Is(9) ? ((string)__pbn__message.Object) : "";
+            set => __pbn__message = new global::ProtoBuf.DiscriminatedUnionObject(9, value);
+        }
+        public bool ShouldSerializesupporter_registered() => __pbn__message.Is(9);
+        public void Resetsupporter_registered() => global::ProtoBuf.DiscriminatedUnionObject.Reset(ref __pbn__message, 9);
+
+        [global::ProtoBuf.ProtoMember(10)]
+        [global::System.ComponentModel.DefaultValue("")]
+        public string user_level_up
+        {
+            get => __pbn__message.Is(10) ? ((string)__pbn__message.Object) : "";
+            set => __pbn__message = new global::ProtoBuf.DiscriminatedUnionObject(10, value);
+        }
+        public bool ShouldSerializeuser_level_up() => __pbn__message.Is(10);
+        public void Resetuser_level_up() => global::ProtoBuf.DiscriminatedUnionObject.Reset(ref __pbn__message, 10);
+
     }
 
     [global::ProtoBuf.ProtoContract()]
@@ -404,6 +424,30 @@ namespace dwango.nicolive.chat.data
         public bool ShouldSerializecontribution_rank() => __pbn__contribution_rank != null;
         public void Resetcontribution_rank() => __pbn__contribution_rank = null;
         private int? __pbn__contribution_rank;
+
+        [global::ProtoBuf.ProtoMember(8)]
+        public GiftBarUpdate gift_bar_update { get; set; }
+
+        [global::ProtoBuf.ProtoContract()]
+        public partial class GiftBarUpdate : global::ProtoBuf.IExtensible
+        {
+            private global::ProtoBuf.IExtension __pbn__extensionData;
+            global::ProtoBuf.IExtension global::ProtoBuf.IExtensible.GetExtensionObject(bool createIfMissing)
+                => global::ProtoBuf.Extensible.GetExtensionObject(ref __pbn__extensionData, createIfMissing);
+
+            [global::ProtoBuf.ProtoMember(1)]
+            public int current_level { get; set; }
+
+            [global::ProtoBuf.ProtoMember(2)]
+            public int next_level_reward_count { get; set; }
+
+            [global::ProtoBuf.ProtoMember(3)]
+            public int remaining_points_for_next_level { get; set; }
+
+            [global::ProtoBuf.ProtoMember(4)]
+            public int required_points_for_next_level { get; set; }
+
+        }
 
     }
 
@@ -544,11 +588,28 @@ namespace dwango.nicolive.chat.data
         [global::ProtoBuf.ProtoMember(1)]
         public Status status { get; set; }
 
+        [global::ProtoBuf.ProtoMember(2)]
+        public FollowRestriction follow_restriction { get; set; }
+
+        [global::ProtoBuf.ProtoContract()]
+        public partial class FollowRestriction : global::ProtoBuf.IExtensible
+        {
+            private global::ProtoBuf.IExtension __pbn__extensionData;
+            global::ProtoBuf.IExtension global::ProtoBuf.IExtensible.GetExtensionObject(bool createIfMissing)
+                => global::ProtoBuf.Extensible.GetExtensionObject(ref __pbn__extensionData, createIfMissing);
+
+            [global::ProtoBuf.ProtoMember(1)]
+            [global::ProtoBuf.CompatibilityLevel(global::ProtoBuf.CompatibilityLevel.Level300)]
+            public global::System.TimeSpan? minimum_follow_duration { get; set; }
+
+        }
+
         [global::ProtoBuf.ProtoContract()]
         public enum Status
         {
             Unrestricted = 0,
             Locked = 1,
+            Restricted = 2,
         }
 
     }
@@ -663,7 +724,14 @@ namespace dwango.nicolive.chat.data
 
             [global::ProtoBuf.ProtoMember(4)]
             [global::System.ComponentModel.DefaultValue("")]
-            public string nicopedia_uri { get; set; } = "";
+            public string nicopedia_uri
+            {
+                get => __pbn__nicopedia_uri ?? "";
+                set => __pbn__nicopedia_uri = value;
+            }
+            public bool ShouldSerializenicopedia_uri() => __pbn__nicopedia_uri != null;
+            public void Resetnicopedia_uri() => __pbn__nicopedia_uri = null;
+            private string __pbn__nicopedia_uri;
 
         }
 
@@ -715,6 +783,16 @@ namespace dwango.nicolive.chat.data
         public bool ShouldSerializegift_points() => __pbn__gift_points != null;
         public void Resetgift_points() => __pbn__gift_points = null;
         private long? __pbn__gift_points;
+
+        [global::ProtoBuf.ProtoMember(6)]
+        public long timeshift_reservations
+        {
+            get => __pbn__timeshift_reservations.GetValueOrDefault();
+            set => __pbn__timeshift_reservations = value;
+        }
+        public bool ShouldSerializetimeshift_reservations() => __pbn__timeshift_reservations != null;
+        public void Resettimeshift_reservations() => __pbn__timeshift_reservations = null;
+        private long? __pbn__timeshift_reservations;
 
     }
 
