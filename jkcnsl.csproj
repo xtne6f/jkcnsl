@@ -10,6 +10,11 @@
     <DebugType>none</DebugType>
     <DebugSymbols>false</DebugSymbols>
     <TrimMode>partial</TrimMode>
+    <DefineConstants>$(DefineConstants);$(AdditionalConstants)</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <DefineConstants>$(DefineConstants);$(AdditionalConstants)</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>

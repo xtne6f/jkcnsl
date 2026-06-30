@@ -94,6 +94,13 @@ namespace jkcnsl
 
         static void Main(string[] args)
         {
+#if !DO_NOT_SUPPRESS_TRACE
+            if (!OperatingSystem.IsWindows())
+            {
+                // トレースがsyslogに出力されて煩わしいため
+                Trace.Listeners.Clear();
+            }
+#endif
             Process parentProcess = null;
             var cleanup = () => { };
             var commands = new BlockingCollection<string>();

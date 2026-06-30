@@ -64,6 +64,8 @@ MITとします。
 ■ソース
 https://github.com/xtne6f/jkcnsl
 
+Windows以外ではトレース出力を抑制していますが /p:AdditionalConstants=DO_NOT_SUPPRESS_TRACE をつけてビルドすると抑制解除します。
+
 dwango,googleフォルダ以下のファイルは
 https://github.com/n-air-app/nicolive-comment-protobuf/tree/871fe37c088af7e34fffd93aa7c2c309be5d90d2
 https://github.com/protocolbuffers/protobuf/tree/35cd01f9fe9afbeea38cc7b979a3b6bfcde82c03
