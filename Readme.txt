@@ -9,14 +9,15 @@
 ソースファイルのみ公開しますので、各自の責任で検査しビルドしてください。
 
 ■使い方など
-.NETアプリなのでビルドは各種のシェルでプロジェクトフォルダに移動し、
-> dotnet publish -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true /p:PublishTrimmed=true
-などとしてください。
+ビルドは.NET SDK 10がインストールされた環境でx64build.batを実行してください。
+jkcnslとJkcnslLoginWindow.exeがbinフォルダ配下のpublishフォルダに生成されます。
 動作環境はWindowsではWindows10以降と思います。
+JkcnslLoginWindow.exeは使用しないなら無視で構いません。
+
 Linuxでは以下のようにビルドできます(Ubuntu 24.04の例)。設定ファイルなどの既定の保存先は"/var/local/jkcnsl"です。
 Windowsで"-r linux-x64"でビルドしたバイナリを持っていっても動くと思います。ARM向けは"-r linux-arm64"です。
 > sudo apt install dotnet-sdk-10.0
-> dotnet publish -c Release -r linux-x64 --self-contained true /p:PublishSingleFile=true /p:PublishTrimmed=true
+> dotnet publish jkcnsl.csproj -c Release -r linux-x64 --self-contained true /p:PublishSingleFile=true /p:PublishTrimmed=true
 > sudo install ./bin/Release/net10.0/linux-x64/publish/jkcnsl /usr/local/bin
 > sudo mkdir /var/local/jkcnsl
 > sudo chown $USER /var/local/jkcnsl  # パーミッション等は適宜調整
@@ -28,35 +29,22 @@ q<改行> と打ち込んでください。
 > R1 wss://{有志の視聴セッションのアドレス}<改行>
 などと打ち込めば、有志の開設した避難所に接続できます。
 
-ニコニコ実況にログインする場合はまず
-> Smail {メールアドレス}<改行>
-> Spassword {パスワード}<改行>
-と打ち込んでログイン情報を設定ファイル"jkcnsl.json"に保存します。
-つづいて
-> Ai<改行>
-と打ち込んで"."が出力されればログイン成功です("!"は失敗)。
-2段階認証を設定している場合はワンタイムパスワードの入力を促されるので、ニコニコ
-から送られた確認コードを
-> +123456<改行>
-のように打ち込んでください。
-
-> Ao<改行>
-とすればログアウトできます。
-
-ログイン情報が設定されていれば次回のニコニコ実況への初回接続時に自動でログインが
-試みられるので、ログインが不要な場合はログアウト後に
-> Smail<改行>
-> Spassword<改行>
-と打ち込んで(mailかpasswordどちらか片方でもOK、"jkcnsl.json"の削除でもOK)ログイン
-情報を削除してください。
-
-2段階認証画面の「端末名」や「このデバイスを信頼する」はそれぞれ
-> Sdevice_name 端末名<改行>
-> Strust_device false<改行>
-のようにして設定できます。
-
+jkcnslはタイムアウト秒数などいくつかの設定情報をjkcnsl.jsonに保存します。
 > S<改行>
 と打ち込めば現在のすべての設定情報を出力できます。
+> Shttp_get_timeout_sec 10<改行>
+などと打ち込んで設定を変更できます。設定を初期化したいときは
+> Shttp_get_timeout_sec<改行>
+などと打ち込んでください。
+
+ニコニコ実況にログインする場合はJkcnslLoginWindow.exeを使用してください。
+JkcnslLoginWindow.exeは専用のEdgeブラウザを開いて、同じフォルダにあるjkcnslの
+nicovideo_cookie(とオプションでuseragent)設定を保存するGUIアプリです(jkcnslがな
+い場合もCookieのコピーはできます)。
+JkcnslLoginWindow.exeを起動してログイン・ログアウトを行い「jkcnslに保存」ボタン
+で保存するのが基本的な流れです。
+いくつかの起動オプションでJkcnslLoginWindow.exeの動作を調整できます。詳細は
+App.xaml.csの冒頭を確認してください。
 
 ■ライセンス
 MITとします。
@@ -81,5 +69,3 @@ https://github.com/asannou/namami を参考にしました。とりわけ変数�
 2024年以降の新方式のニコニコ実況への対応にあたり特に
 https://github.com/tsukumijima/NDGRClient および
 https://github.com/noriokun4649/TVTComment を参考にしました。
-
-ログイン機能の実装にあたりnicologin( www.axfc.netの/u/4052467 )を参考にしました。
